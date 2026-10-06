@@ -2,7 +2,16 @@
 
 把原本的「Zsigma 籌碼掃描 · 全台股」搬到美股(NASDAQ / NYSE / AMEX 全部普通股)。
 
-## 使用方式(Windows)
+## 線上版(每天自動更新)
+
+👉 https://peterpita-tech.github.io/Peterpita/
+
+GitHub Actions(`.github/workflows/zsigma-us.yml`)會在每個美股交易日收盤後(台灣時間週二~週六 06:30)自動抓資料、重新發布網頁。
+也可以到 repo 的 **Actions → Zsigma 美股掃描 → Run workflow** 手動更新。
+
+第一次需要啟用 Pages:repo **Settings → Pages → Build and deployment → Source** 選 **GitHub Actions**。
+
+## 使用方式(Windows 本機)
 
 1. 安裝 Python 3.10 以上
 2. 雙擊 `run.bat`:會自動安裝套件、抓全美股資料(約 5~10 分鐘),完成後打開 `Zsigma籌碼掃描_美股.html`
