@@ -1,13 +1,16 @@
-name: Zsigma 美股掃描
+name: Zsigma 掃描(美股 + 台股)
 
 on:
   schedule:
-    # 週一~週五 22:30 UTC = 台灣時間 週二~週六 06:30(美股收盤後)
+    # 週一~週五 07:30 UTC = 台灣 15:30(台股收盤後)
+    - cron: "30 7 * * 1-5"
+    # 週一~週五 22:30 UTC = 台灣隔日 06:30(美股收盤後)
     - cron: "30 22 * * 1-5"
   workflow_dispatch:        # 可在 Actions 頁面手動執行
   push:
     paths:
       - "zsigma-us/**"
+      - "zsigma-tw/**"
       - ".github/workflows/zsigma-us.yml"
 
 permissions:
@@ -19,10 +22,13 @@ concurrency:
   group: zsigma-pages
   cancel-in-progress: false
 
+env:
+  SITE: https://peterpita-tech.github.io/Peterpita
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -35,16 +41,38 @@ jobs:
       - name: 安裝套件
         run: pip install -r zsigma-us/requirements.txt
 
-      - name: 抓全美股資料並計算指標
+      - name: 美股:抓資料並計算指標
+        id: us
+        continue-on-error: true
         working-directory: zsigma-us
         run: python fetch_zsigma_us.py
 
+      - name: 台股:抓資料並計算指標
+        id: tw
+        continue-on-error: true
+        working-directory: zsigma-tw
+        run: python fetch_zsigma_tw.py
+
+      # 某一邊失敗時沿用網站上目前的版本,另一邊照常更新
       - name: 準備網站檔案
         run: |
-          mkdir -p _site
-          cp "zsigma-us/Zsigma籌碼掃描_美股.html" _site/index.html
-          cp zsigma-us/data.js _site/data.js
+          mkdir -p _site/tw
           touch _site/.nojekyll
+          if [ "${{ steps.us.outcome }}" = success ]; then
+            cp "zsigma-us/Zsigma籌碼掃描_美股.html" _site/index.html
+          else
+            echo "::warning::美股更新失敗,沿用網站上的舊版"
+            curl -fsSL "$SITE/" -o _site/index.html
+          fi
+          if [ "${{ steps.tw.outcome }}" = success ]; then
+            cp "zsigma-tw/Zsigma籌碼掃描_台股.html" _site/tw/index.html
+          else
+            echo "::warning::台股更新失敗,沿用網站上的舊版"
+            curl -fsSL "$SITE/tw/" -o _site/tw/index.html || cp zsigma-tw/index.html _site/tw/index.html
+          fi
+          if [ "${{ steps.us.outcome }}" != success ] && [ "${{ steps.tw.outcome }}" != success ]; then
+            echo "::error::美股與台股都更新失敗"; exit 1
+          fi
 
       - uses: actions/upload-pages-artifact@v3
         with:

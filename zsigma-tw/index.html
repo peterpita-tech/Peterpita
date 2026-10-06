@@ -3,23 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zsigma 籌碼微結構掃描 · 美股</title>
+<title>Zsigma 籌碼微結構掃描 · 全台股</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root{
     --bg:#0b0e14; --panel:#141925; --panel2:#1b2231; --line:#2a3346;
     --txt:#e6ebf2; --muted:#8b97ad; --dim:#5f6b80;
-    --up:#ff4d4f; --down:#13c267; --upbg:rgba(255,77,79,.14); --downbg:rgba(19,194,103,.14);   /* 台股慣例:漲紅跌綠 */
+    --up:#ff4d4f; --down:#13c267;       /* 台股慣例:漲紅跌綠 */
     --accent:#4da3ff; --amber:#ffb020; --purple:#a779ff;
     --shadow:0 8px 28px rgba(0,0,0,.35);
   }
-  :root[data-color="us"]{--up:#13c267; --down:#ff4d4f; --upbg:rgba(19,194,103,.14); --downbg:rgba(255,77,79,.14)}  /* 美股慣例:漲綠跌紅 */
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--txt);font-family:"Noto Sans TC","Segoe UI",-apple-system,sans-serif;line-height:1.45;padding:20px;-webkit-font-smoothing:antialiased}
   .wrap{max-width:1480px;margin:0 auto}
-  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
   h1{font-size:22px;font-weight:700;letter-spacing:.5px}
   h1 .sub{color:var(--accent)}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .switch{background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:7px 14px;border-radius:9px;font-size:13px;font-weight:600;text-decoration:none}
+  .switch:hover{border-color:var(--accent);color:var(--txt)}
   .meta{color:var(--muted);font-size:12.5px;margin-top:3px}
   .meta b{color:var(--txt)}
   .disclaimer{background:rgba(255,176,32,.08);border:1px solid rgba(255,176,32,.3);color:var(--amber);
@@ -37,12 +38,11 @@
   .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
   .row+.row{margin-top:12px}
   .seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line);border-radius:9px;overflow:hidden}
-  .seg button{background:none;border:none;color:var(--muted);padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600}
+  .seg button{background:none;border:none;color:var(--muted);padding:8px 16px;cursor:pointer;font-size:13px;font-weight:600}
   .seg button.on{background:var(--accent);color:#06101e}
-  input[type=text],select{background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);
-    padding:8px 12px;font-size:13px;outline:none}
-  input[type=text]{width:200px}
-  input[type=text]:focus,select:focus{border-color:var(--accent)}
+  input[type=text]{background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);
+    padding:8px 12px;font-size:13px;width:200px;outline:none}
+  input[type=text]:focus{border-color:var(--accent)}
   .preset{background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:7px 13px;border-radius:20px;
     cursor:pointer;font-size:12.5px;font-weight:600;transition:.15s}
   .preset:hover{border-color:var(--accent);color:var(--txt)}
@@ -59,28 +59,25 @@
   table{width:100%;border-collapse:collapse;font-size:12.5px}
   thead th{position:sticky;top:0;background:var(--panel2);color:var(--muted);font-weight:600;font-size:11.5px;
     padding:9px 10px;text-align:right;cursor:pointer;white-space:nowrap;border-bottom:1px solid var(--line);user-select:none}
-  thead th:nth-child(-n+4){text-align:left}
+  thead th:first-child,thead th:nth-child(2),thead th:nth-child(3){text-align:left}
   thead th:hover{color:var(--txt)}
   thead th.sorted{color:var(--accent)}
   th .ar{font-size:9px;opacity:.7}
   tbody td{padding:8px 10px;text-align:right;border-bottom:1px solid rgba(42,51,70,.5);font-variant-numeric:tabular-nums;white-space:nowrap}
-  tbody td:nth-child(-n+4){text-align:left}
+  tbody td:first-child,tbody td:nth-child(2),tbody td:nth-child(3){text-align:left}
   tbody tr{cursor:pointer}
   tbody tr:hover{background:var(--panel2)}
   .up{color:var(--up)} .down{color:var(--down)} .neu{color:var(--muted)}
   .code{font-weight:700;color:var(--txt)}
   .code a{color:inherit;text-decoration:none}
   .code a:hover{color:var(--accent);text-decoration:underline}
-  .nm{display:inline-block;max-width:220px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
-  .sec{color:var(--muted);font-size:11.5px}
   .mk{font-size:10px;padding:1px 6px;border-radius:5px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
-  .mk.NASDAQ{color:var(--purple);border-color:rgba(167,121,255,.4)}
-  .mk.NYSE{color:var(--accent);border-color:rgba(77,163,255,.4)}
-  .mk.AMEX{color:var(--amber);border-color:rgba(255,176,32,.4)}
+  .mk.otc{color:var(--purple);border-color:rgba(167,121,255,.4)}
+  .star{color:var(--amber);font-size:11px}
   .scorebar{display:inline-block;width:46px;height:7px;background:var(--panel2);border-radius:4px;overflow:hidden;vertical-align:middle;margin-right:6px}
   .scorebar i{display:block;height:100%;background:linear-gradient(90deg,#4da3ff,#a779ff)}
   .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600}
-  .chip.up{background:var(--upbg)} .chip.down{background:var(--downbg)}
+  .chip.up{background:rgba(255,77,79,.14)} .chip.down{background:rgba(19,194,103,.14)}
 
   /* modal */
   .overlay{position:fixed;inset:0;background:rgba(4,7,12,.72);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
@@ -96,10 +93,8 @@
   .mcard .k{color:var(--muted);font-size:11px}
   .mcard .v{font-size:18px;font-weight:700;margin-top:2px}
   .chartbox{position:relative;height:240px;margin-top:6px}
-  .switch{background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:7px 14px;border-radius:9px;font-size:13px;font-weight:600;text-decoration:none}
-  .switch:hover{border-color:var(--accent);color:var(--txt)}
-  .links{margin-top:14px;font-size:12.5px;color:var(--muted)}
-  .links a{color:var(--accent);margin-right:12px}
+  .gini-note{background:rgba(255,176,32,.08);border:1px solid rgba(255,176,32,.25);border-radius:10px;padding:11px 14px;margin-top:14px;font-size:12.5px;color:var(--amber)}
+  .gini-note a{color:var(--amber)}
 
   .glossary{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:16px;box-shadow:var(--shadow)}
   .glossary h3{font-size:15px;margin-bottom:12px}
@@ -116,18 +111,12 @@
 <div class="wrap">
   <div class="top">
     <div>
-      <h1>Zsigma <span class="sub">籌碼微結構</span> 掃描 · 美股</h1>
+      <h1>Zsigma <span class="sub">籌碼微結構</span> 掃描 · 全台股</h1>
       <div class="meta" id="meta">載入中 …</div>
     </div>
-    <div class="row">
-    <a class="switch" href="https://peterpita-tech.github.io/Peterpita/tw/">🇹🇼 台股版 →</a>
-    <div class="seg" id="colorSeg" title="漲跌顏色">
-      <button data-c="us">漲綠跌紅</button>
-      <button data-c="tw">漲紅跌綠</button>
-    </div>
-    </div>
+    <a class="switch" href="https://peterpita-tech.github.io/Peterpita/">🇺🇸 美股版 →</a>
   </div>
-  <div class="disclaimer">⚠ 本儀表板套用 Zsigma 金融模型實驗室文章之量化框架,以公開 OHLCV 重算 NASDAQ / NYSE / AMEX 全市場,屬技術研究用途,<b>不構成投資建議</b>。美股無券商分點資料,原文 Buy_Gini 與洗盤機率無法重現,改以「買盤集中度(估)」OHLCV 代理呈現。</div>
+  <div class="disclaimer">⚠ 本儀表板套用 Zsigma 金融模型實驗室文章之量化框架,以公開 OHLCV 重算全市場,屬技術研究用途,<b>不構成投資建議</b>。Buy_Gini 基尼係數與洗盤機率為原文 proprietary 指標(需分點資料),全市場改以「買盤集中度(估)」OHLCV 代理呈現;三篇原文標的另保留其真實 Gini。</div>
 
   <div class="kpis" id="kpis"></div>
 
@@ -135,25 +124,15 @@
     <div class="row">
       <div class="seg" id="mktSeg">
         <button class="on" data-m="all">全部</button>
-        <button data-m="NASDAQ">NASDAQ</button>
-        <button data-m="NYSE">NYSE</button>
-        <button data-m="AMEX">AMEX</button>
+        <button data-m="上市">上市</button>
+        <button data-m="上櫃">上櫃</button>
       </div>
       <input type="text" id="search" placeholder="搜尋代號 / 名稱 …">
-      <select id="sector"><option value="">全部產業</option></select>
-      <select id="cap">
-        <option value="">全部市值</option>
-        <option value="mega">超大型 ≥ $200B</option>
-        <option value="large">大型 $10B–200B</option>
-        <option value="mid">中型 $2B–10B</option>
-        <option value="small">小型 $300M–2B</option>
-        <option value="micro">微型 &lt; $300M</option>
-      </select>
       <span style="flex:1"></span>
       <button class="preset" data-p="strong">🔥 強勢鎖碼</button>
       <button class="preset" data-p="cost">站上成本線</button>
       <button class="preset" data-p="hiz">⚡ 高Z極端</button>
-      <button class="preset" data-p="vol">📈 爆量</button>
+      <button class="preset" data-p="article">📄 原文標的</button>
       <button class="preset" data-p="reset">清除</button>
     </div>
     <div class="row">
@@ -161,7 +140,6 @@
       <div class="filt">vs月線乖離 ≥ <input type="range" id="fb" min="-10" max="30" step="1" value="-10"><span class="val" id="fbv">不限</span></div>
       <div class="filt">集中度 ≥ <input type="range" id="fc" min="0" max="0.9" step="0.05" value="0"><span class="val" id="fcv">不限</span></div>
       <div class="filt">強勢分數 ≥ <input type="range" id="fs" min="0" max="95" step="5" value="0"><span class="val" id="fsv">不限</span></div>
-      <div class="filt">均成交額 ≥ <input type="range" id="fd" min="0" max="6" step="1" value="0"><span class="val" id="fdv">不限</span></div>
     </div>
   </div>
 
@@ -173,7 +151,7 @@
     <div class="scroll">
       <table id="tbl">
         <thead><tr id="thr"></tr></thead>
-        <tbody id="tb"><tr><td colspan="18" class="loading">載入資料中 …</td></tr></tbody>
+        <tbody id="tb"><tr><td colspan="12" class="loading">載入資料中 …</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -182,19 +160,17 @@
     <h3>📚 指標說明</h3>
     <div class="gloss-grid">
       <div class="gloss"><h4>強勢分數(0–100)</h4><p>Z-Score(30%)、月線乖離(20%)、成本線乖離(20%)、買盤集中度(20%)的全市場百分位排名,加上站上雙成本線結構(10%)。越高越貼近原文「強勢鎖碼」型態。</p></div>
-      <div class="gloss"><h4>Z-Score 超額乖離</h4><p>(收盤 − MA20) / 20日標準差。|Z|≥2 屬統計極端區,動能強但回歸壓力高。</p></div>
+      <div class="gloss"><h4>Z-Score 超額乖離</h4><p>(收盤 − MA20) / 20日標準差。|Z|≥2 屬統計極端區,動能強但回歸壓力高。完全依文章定義由收盤重算。</p></div>
       <div class="gloss"><h4>贏家成本線(EMA15 收盤)</h4><p>近期獲利方加權平均成本的代理。價格站穩其上代表多方主導,常為回檔支撐。</p></div>
       <div class="gloss"><h4>散戶受困成本線(EMA15 典型價)</h4><p>以(高+低+收)/3 的 EMA15 估套牢散戶成本帶;逼近時易見解套賣壓。</p></div>
       <div class="gloss"><h4>帕金森波動率</h4><p>以 20 日高低價估計、年化(%)的波動率。數值放大代表震幅擴張、行情活躍。</p></div>
       <div class="gloss"><h4>買盤集中度(估)</h4><p>20日「成交額 × K棒收盤位置」的 Gini 係數,代理買盤是否集中於少數大量上攻日。<b>非原文 Buy_Gini</b>(後者需分點資料),僅 OHLCV 近似。</p></div>
-      <div class="gloss"><h4>量比</h4><p>今日成交量 ÷ 前 19 日平均量。≥2 代表明顯爆量,常伴隨消息或資金進駐。</p></div>
-      <div class="gloss"><h4>均成交額</h4><p>20 日平均每日成交金額(百萬美元)。美股小型股流動性落差極大,建議搭配此濾網排除冷門股。</p></div>
     </div>
   </div>
 
   <footer>
-    Zsigma 籌碼微結構掃描 · 美股版 · 框架源自 vocus.cc Zsigma 金融模型實驗室<br>
-    資料:NASDAQ 代號表 + Yahoo Finance 日線(還原權值)· 僅供研究參考,不構成投資建議
+    Zsigma 籌碼微結構掃描 · 框架源自 vocus.cc 三篇文章(加捷 4109 / 佶優 5452 / 鈦昇 8027)<br>
+    資料:TWSE / TPEx 代號表 + Yahoo Finance 日線(還原權值)· 每個交易日 15:30 自動更新 · 僅供研究參考,不構成投資建議 · 台股漲跌色:紅漲綠跌
   </footer>
 </div>
 
@@ -203,23 +179,16 @@
 <!--ZS_DATA-->
 <script>
 let DATA=null, rows=[], view=[];
-const state={mkt:"all", q:"", sector:"", cap:"", preset:null, fz:-1, fb:-10, fc:0, fs:0, fd:0, sortKey:"score", sortDir:-1};
-const DV_STEPS=[0,1,5,10,50,100,500];   // 均成交額門檻(百萬美元)
-const CAP={mega:[200e9,Infinity],large:[10e9,200e9],mid:[2e9,10e9],small:[3e8,2e9],micro:[0,3e8]};
+const state={mkt:"all", q:"", preset:null, fz:-1, fb:-10, fc:0, fs:0, sortKey:"score", sortDir:-1};
 const f=(n,d=2)=> n==null?"—":Number(n).toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
 const sgn=(v,d=2)=> v==null?"—":(v>0?"+":"")+f(v,d);
 const cls=v=> v>0?"up":(v<0?"down":"neu");
-const money=v=> v==null?"—":v>=1e12?"$"+f(v/1e12,2)+"T":v>=1e9?"$"+f(v/1e9,1)+"B":"$"+f(v/1e6,0)+"M";
-const dvTxt=v=> v==null?"—":v>=1000?"$"+f(v/1000,2)+"B":"$"+f(v,1)+"M";
-const esc=s=> String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const yhref=c=> `https://finance.yahoo.com/quote/${encodeURIComponent(c)}`;
-const tvhref=c=> `https://www.tradingview.com/symbols/${encodeURIComponent(c.replace("-","."))}/`;
+const yhref=(c,m)=> `https://finance.yahoo.com/quote/${c}.${m==="上櫃"?"TWO":"TW"}`;
 
 const COLS=[
-  {k:"code",t:"代號",fmt:r=>`<span class="code"><a href="${yhref(r.code)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(r.code)}</a></span>`},
-  {k:"name",t:"名稱",fmt:r=>`<span class="nm" title="${esc(r.name)}">${esc(r.name)}</span>`},
-  {k:"mkt",t:"交易所",fmt:r=>`<span class="mk ${r.mkt}">${r.mkt}</span>`},
-  {k:"sector",t:"產業",fmt:r=>`<span class="sec">${esc(r.sector||"—")}</span>`},
+  {k:"code",t:"代號",fmt:r=>`<span class="code"><a href="${yhref(r.code,r.mkt)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${r.code}</a></span>${r.article?' <span class="star" title="原文標的">★</span>':''}`},
+  {k:"name",t:"名稱",fmt:r=>r.name},
+  {k:"mkt",t:"市場",fmt:r=>`<span class="mk ${r.mkt==='上櫃'?'otc':''}">${r.mkt}</span>`},
   {k:"close",t:"收盤",fmt:r=>f(r.close,2)},
   {k:"chg",t:"漲跌%",fmt:r=>`<span class="chip ${cls(r.chg)}">${sgn(r.chg)}%</span>`},
   {k:"ma20",t:"月線MA20",fmt:r=>f(r.ma20,2)},
@@ -229,12 +198,8 @@ const COLS=[
   {k:"z",t:"Z-Score",fmt:r=>`<span class="${r.z>=2?'up':(r.z<=-2?'down':'neu')}">${f(r.z,2)}</span>`},
   {k:"park",t:"波動率",fmt:r=>f(r.park,1)},
   {k:"conc",t:"集中度(估)",fmt:r=>f(r.conc,3)},
-  {k:"volR",t:"量比",fmt:r=>`<span class="${r.volR>=2?'up':''}">${f(r.volR,2)}</span>`},
-  {k:"dv",t:"均成交額",fmt:r=>dvTxt(r.dv)},
-  {k:"mcap",t:"市值",fmt:r=>money(r.mcap)},
   {k:"score",t:"強勢分數",fmt:r=>`<span class="scorebar"><i style="width:${r.score}%"></i></span>${f(r.score,1)}`},
 ];
-const TEXT_KEYS=["code","name","mkt","sector"];
 
 function renderHead(){
   document.getElementById("thr").innerHTML = COLS.map(c=>{
@@ -245,7 +210,7 @@ function renderHead(){
   document.querySelectorAll("#thr th").forEach(th=>th.onclick=()=>{
     const k=th.dataset.k;
     if(state.sortKey===k) state.sortDir*=-1;
-    else{state.sortKey=k; state.sortDir = TEXT_KEYS.includes(k)?1:-1;}
+    else{state.sortKey=k; state.sortDir = (k==="code"||k==="name"||k==="mkt")?1:-1;}
     apply();
   });
 }
@@ -254,7 +219,7 @@ function kpis(){
   const d=DATA;
   const pma=(d.aboveMA/d.total*100), pcost=(d.aboveCost/d.total*100);
   document.getElementById("kpis").innerHTML=[
-    `<div class="kpi"><div class="k">掃描檔數</div><div class="v">${d.total} <small>檔</small></div><div class="k" style="margin-top:4px">NASDAQ ${d.nasdaq} · NYSE ${d.nyse} · AMEX ${d.amex}</div></div>`,
+    `<div class="kpi"><div class="k">掃描檔數</div><div class="v">${d.total} <small>檔</small></div><div class="k" style="margin-top:4px">上市 ${d.listed} · 上櫃 ${d.otc}</div></div>`,
     `<div class="kpi"><div class="k">站上月線</div><div class="v">${pma.toFixed(0)}<small>%</small></div><div class="breadth"><div class="f" style="width:${pma}%"></div></div></div>`,
     `<div class="kpi"><div class="k">站上贏家成本線</div><div class="v">${pcost.toFixed(0)}<small>%</small></div><div class="breadth"><div class="f" style="width:${pcost}%"></div></div></div>`,
     `<div class="kpi"><div class="k">高Z 極端(Z≥2)</div><div class="v">${d.hiZ} <small>檔</small></div></div>`,
@@ -263,28 +228,24 @@ function kpis(){
 }
 
 function apply(){
-  const minDv=DV_STEPS[state.fd];
   view = rows.filter(r=>{
     if(state.mkt!=="all" && r.mkt!==state.mkt) return false;
-    if(state.sector && r.sector!==state.sector) return false;
-    if(state.cap){const [lo,hi]=CAP[state.cap]; if(r.mcap==null||r.mcap<lo||r.mcap>=hi) return false;}
+    if(state.preset==="article" && !r.article) return false;
     if(state.q){
       const q=state.q.toLowerCase();
-      if(!(r.code.toLowerCase().includes(q)||r.name.toLowerCase().includes(q))) return false;
+      if(!(r.code.includes(q)||r.name.toLowerCase().includes(q))) return false;
     }
-    if(state.preset==="vol" && !(r.volR>=2 && r.chg>0)) return false;
     if(state.fz>-1 && r.z<state.fz) return false;
     if(state.fb>-10 && r.biasMA<state.fb) return false;
     if(state.fc>0 && (r.conc==null||r.conc<state.fc)) return false;
     if(state.fs>0 && r.score<state.fs) return false;
-    if(minDv>0 && (r.dv==null||r.dv<minDv)) return false;
     return true;
   });
   const k=state.sortKey, dir=state.sortDir;
   view.sort((a,b)=>{
     let va=a[k], vb=b[k];
-    if(typeof va==="string"||typeof vb==="string"){va=va||"";vb=vb||"";return va<vb?-1*dir:(va>vb?1*dir:0);}
-    va=va==null?1e15*dir:va; vb=vb==null?1e15*dir:vb;   // 空值永遠排最後
+    if(typeof va==="string"){return va<vb?-1*dir:(va>vb?1*dir:0);}
+    va=va==null?-1e9:va; vb=vb==null?-1e9:vb;
     return (va-vb)*dir;
   });
   renderHead();
@@ -297,15 +258,18 @@ function apply(){
   document.getElementById("cnt").innerHTML = `符合 <b>${view.length}</b> 檔${view.length>LIMIT?` · 顯示前 ${LIMIT}`:""}`;
 }
 
-let chart=null;
 function openModal(r){
   const aboveTxt=(r.close>r.costW&&r.close>r.costTR)?'<span class="up">站上雙成本線(多方掌控)</span>'
     :(r.close<r.costW&&r.close<r.costTR)?'<span class="down">跌破雙成本線(籌碼鬆動)</span>':'<span class="neu">成本線之間(拉鋸)</span>';
+  let gini="";
+  if(r.article){
+    gini=`<div class="gini-note">📄 原文標的:真實 Buy_Gini = <b>${f(r.giniReal,4)}</b>(前值 ${f(r.giniPrev,4)} @ ${r.giniDate})· 洗盤機率 ${f(r.wash,2)}<br>
+      上方「集中度(估)」為 OHLCV 代理,與原文分點 Gini 非同一口徑。原文連結:<a href="${r.url}" target="_blank" rel="noopener">vocus.cc</a></div>`;
+  }
   document.getElementById("modal").innerHTML=`
     <div class="mh">
-      <div><h2>${esc(r.name)} <span style="color:var(--dim)">${esc(r.code)}</span> <span class="mk ${r.mkt}">${r.mkt}</span></h2>
-        <div class="meta">$${f(r.close,2)} · <span class="${cls(r.chg)}">${sgn(r.chg)}%</span> · ${aboveTxt}</div>
-        <div class="meta">${esc(r.sector||"—")} · 市值 ${money(r.mcap)} · 均成交額 ${dvTxt(r.dv)}</div></div>
+      <div><h2>${r.name} <span style="color:var(--dim)">${r.code}</span> <span class="mk ${r.mkt==='上櫃'?'otc':''}">${r.mkt}</span> ${r.article?'<span class="star">★ 原文</span>':''}</h2>
+        <div class="meta">收盤 ${f(r.close,2)} · ${sgn(r.chg)}% · ${aboveTxt}</div></div>
       <button class="x" onclick="closeModal()">✕</button>
     </div>
     <div class="mb">
@@ -315,20 +279,17 @@ function openModal(r){
         <div class="mcard"><div class="k">vs成本乖離</div><div class="v ${cls(r.biasW)}">${sgn(r.biasW)}%</div></div>
         <div class="mcard"><div class="k">帕金森波動率</div><div class="v">${f(r.park,2)}</div></div>
         <div class="mcard"><div class="k">買盤集中度(估)</div><div class="v">${f(r.conc,3)}</div></div>
-        <div class="mcard"><div class="k">量比</div><div class="v">${f(r.volR,2)}</div></div>
         <div class="mcard"><div class="k">強勢分數</div><div class="v">${f(r.score,1)}</div></div>
       </div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:4px">價格 vs 成本/均線結構</div>
       <div class="chartbox"><canvas id="mc"></canvas></div>
-      <div class="links">外部連結:<a href="${yhref(r.code)}" target="_blank" rel="noopener">Yahoo Finance</a><a href="${tvhref(r.code)}" target="_blank" rel="noopener">TradingView</a><a href="https://finviz.com/quote.ashx?t=${encodeURIComponent(r.code)}" target="_blank" rel="noopener">Finviz</a></div>
+      ${gini}
     </div>`;
   document.getElementById("overlay").classList.add("show");
-  const upC=getComputedStyle(document.documentElement).getPropertyValue("--up").trim();
-  const lv=[{l:"收盤",v:r.close,c:upC},{l:"散戶受困線",v:r.costTR,c:"#a779ff"},
-            {l:"贏家成本線",v:r.costW,c:"#ffb020"},{l:"月線MA20",v:r.ma20,c:"#4da3ff"}].sort((a,b)=>b.v-a.v);
-  if(chart) chart.destroy();
+  const lv=[{l:"收盤",v:r.close,c:"#ff4d4f"},{l:"散戶受困線",v:r.costTR,c:"#a779ff"},
+            {l:"贏家成本線",v:r.costW,c:"#13c267"},{l:"月線MA20",v:r.ma20,c:"#4da3ff"}].sort((a,b)=>b.v-a.v);
   if(typeof Chart==="undefined") return;   // CDN 未載入時略過圖表
-  chart=new Chart(document.getElementById("mc"),{type:"bar",
+  new Chart(document.getElementById("mc"),{type:"bar",
     data:{labels:lv.map(x=>x.l),datasets:[{data:lv.map(x=>x.v),backgroundColor:lv.map(x=>x.c),borderRadius:6,maxBarThickness:40}]},
     options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{backgroundColor:"#1b2231"}},
@@ -339,16 +300,6 @@ function closeModal(){document.getElementById("overlay").classList.remove("show"
 document.getElementById("overlay").onclick=e=>{if(e.target.id==="overlay")closeModal();};
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeModal();});
 
-// 漲跌顏色(記在瀏覽器)
-function setColor(c){
-  document.documentElement.dataset.color=c;
-  document.querySelectorAll("#colorSeg button").forEach(x=>x.classList.toggle("on",x.dataset.c===c));
-  try{localStorage.setItem("zs-color",c);}catch(e){}
-}
-let savedColor="us"; try{savedColor=localStorage.getItem("zs-color")||"us";}catch(e){}
-setColor(savedColor);
-document.getElementById("colorSeg").onclick=e=>{const b=e.target.closest("button"); if(b) setColor(b.dataset.c);};
-
 // controls
 document.getElementById("mktSeg").onclick=e=>{
   const b=e.target.closest("button"); if(!b)return;
@@ -357,38 +308,35 @@ document.getElementById("mktSeg").onclick=e=>{
   apply();
 };
 document.getElementById("search").oninput=e=>{state.q=e.target.value.trim();apply();};
-document.getElementById("sector").onchange=e=>{state.sector=e.target.value;apply();};
-document.getElementById("cap").onchange=e=>{state.cap=e.target.value;apply();};
-const SLID={fz:["fzv",v=>v<=-1?"不限":"≥"+v,-1],fb:["fbv",v=>v<=-10?"不限":"≥"+v+"%",-10],
-            fc:["fcv",v=>v<=0?"不限":"≥"+v,0],fs:["fsv",v=>v<=0?"不限":"≥"+v,0],
-            fd:["fdv",v=>v<=0?"不限":"$"+DV_STEPS[v]+"M",0]};
-const setS=(id,val)=>{document.getElementById(id).value=val;state[id]=val;document.getElementById(SLID[id][0]).textContent=SLID[id][1](val);};
-Object.keys(SLID).forEach(id=>{
+const slid=[["fz","fzv",v=>v<=-1?"不限":"≥"+v],["fb","fbv",v=>v<=-10?"不限":"≥"+v+"%"],
+            ["fc","fcv",v=>v<=0?"不限":"≥"+v],["fs","fsv",v=>v<=0?"不限":"≥"+v]];
+slid.forEach(([id,vid,fmt])=>{
   const el=document.getElementById(id);
-  el.oninput=()=>{setS(id,parseFloat(el.value));apply();};
+  el.oninput=()=>{state[id]=parseFloat(el.value);document.getElementById(vid).textContent=fmt(parseFloat(el.value));apply();};
 });
 document.querySelectorAll(".preset").forEach(b=>b.onclick=()=>{
   const p=b.dataset.p;
-  Object.keys(SLID).forEach(id=>setS(id,SLID[id][2]));
+  // reset sliders helper
+  const setS=(id,val,vid,txt)=>{document.getElementById(id).value=val;state[id]=val;document.getElementById(vid).textContent=txt;};
   if(p==="reset"||state.preset===p){
     state.preset=null;
+    setS("fz",-1,"fzv","不限");setS("fb",-10,"fbv","不限");setS("fc",0,"fcv","不限");setS("fs",0,"fsv","不限");
     document.querySelectorAll(".preset").forEach(x=>x.classList.remove("on"));
     apply();return;
   }
   state.preset=p;
   document.querySelectorAll(".preset").forEach(x=>x.classList.toggle("on",x===b));
-  if(p==="strong"){setS("fs",60);setS("fc",0.6);setS("fd",2);state.sortKey="score";state.sortDir=-1;}
-  else if(p==="cost"){setS("fb",0);state.sortKey="biasW";state.sortDir=-1;}
-  else if(p==="hiz"){setS("fz",2);state.sortKey="z";state.sortDir=-1;}
-  else if(p==="vol"){setS("fd",1);state.sortKey="volR";state.sortDir=-1;}
+  setS("fz",-1,"fzv","不限");setS("fb",-10,"fbv","不限");setS("fc",0,"fcv","不限");setS("fs",0,"fsv","不限");
+  if(p==="strong"){setS("fs",60,"fsv","≥60");setS("fc",0.6,"fcv","≥0.6");state.sortKey="score";state.sortDir=-1;}
+  else if(p==="cost"){setS("fb",0,"fbv","≥0%");state.sortKey="biasW";state.sortDir=-1;}
+  else if(p==="hiz"){setS("fz",2,"fzv","≥2");state.sortKey="z";state.sortDir=-1;}
+  else if(p==="article"){state.sortKey="score";state.sortDir=-1;}
   apply();
 });
 
 function boot(data){
   DATA=data; rows=data.rows||[];
-  const secs=[...new Set(rows.map(r=>r.sector).filter(s=>s&&s!=="—"))].sort();
-  document.getElementById("sector").innerHTML='<option value="">全部產業</option>'+secs.map(s=>`<option>${esc(s)}</option>`).join("");
-  document.getElementById("meta").innerHTML=`資料日期 <b>${data.date}</b>(回溯 ${data.tradingDays} 交易日)· 全市場 <b>${data.total}</b> 檔普通股 · 資料來源 NASDAQ + Yahoo Finance 日線`;
+  document.getElementById("meta").innerHTML=`資料日期 <b>${data.date}</b>(回溯 ${data.tradingDays} 交易日)· 全市場 <b>${data.total}</b> 檔普通股 · 資料來源 TWSE / TPEx + Yahoo Finance 日線`;
   kpis(); apply();
 }
 
@@ -396,7 +344,7 @@ function boot(data){
 function load(){
   if(window.ZS_DATA){boot(window.ZS_DATA);return;}
   const s=document.createElement("script");s.src="data.js";
-  const fail=()=>document.getElementById("tb").innerHTML=`<tr><td colspan="${COLS.length}" class="loading">無法載入資料(請先執行 python fetch_zsigma_us.py)</td></tr>`;
+  const fail=()=>document.getElementById("tb").innerHTML=`<tr><td colspan="${COLS.length}" class="loading">無法載入資料(請先執行 python fetch_zsigma_tw.py)</td></tr>`;
   s.onload=()=>window.ZS_DATA?boot(window.ZS_DATA):fail();
   s.onerror=fail;
   document.body.appendChild(s);

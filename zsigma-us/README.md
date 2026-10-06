@@ -4,7 +4,7 @@
 
 ## 線上版(每天自動更新)
 
-👉 https://peterpita-tech.github.io/Peterpita/
+👉 美股:https://peterpita-tech.github.io/Peterpita/ · 台股:https://peterpita-tech.github.io/Peterpita/tw/
 
 GitHub Actions(`.github/workflows/zsigma-us.yml`)會在每個美股交易日收盤後(台灣時間週二~週六 06:30)自動抓資料、重新發布網頁。
 也可以到 repo 的 **Actions → Zsigma 美股掃描 → Run workflow** 手動更新。
