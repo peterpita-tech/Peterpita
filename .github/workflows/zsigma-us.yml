@@ -2,9 +2,11 @@ name: Zsigma 掃描(美股 + 台股)
 
 on:
   schedule:
-    # 週一~週五 07:30 UTC = 台灣 15:30(台股收盤後)
+    # 台股盤中:台灣 09:07~13:37 每 30 分鐘(只更新台股)
+    - cron: "7,37 1-5 * * 1-5"
+    # 台股收盤後:台灣 15:30(只更新台股)
     - cron: "30 7 * * 1-5"
-    # 週一~週五 22:30 UTC = 台灣隔日 06:30(美股收盤後)
+    # 美股收盤後:台灣隔日 06:30(只更新美股)
     - cron: "30 22 * * 1-5"
   workflow_dispatch:        # 可在 Actions 頁面手動執行
   push:
@@ -38,40 +40,55 @@ jobs:
           cache: pip
           cache-dependency-path: zsigma-us/requirements.txt
 
+      # 排程只更新對應市場;手動執行 / push 兩個都更新
+      - name: 決定要更新哪個市場
+        id: plan
+        run: |
+          case "${{ github.event.schedule }}" in
+            "30 22 * * 1-5") echo "us=true"  >> "$GITHUB_OUTPUT"; echo "tw=false" >> "$GITHUB_OUTPUT" ;;
+            "")              echo "us=true"  >> "$GITHUB_OUTPUT"; echo "tw=true"  >> "$GITHUB_OUTPUT" ;;
+            *)               echo "us=false" >> "$GITHUB_OUTPUT"; echo "tw=true"  >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - name: 安裝套件
         run: pip install -r zsigma-us/requirements.txt
 
       - name: 美股:抓資料並計算指標
         id: us
+        if: steps.plan.outputs.us == 'true'
         continue-on-error: true
         working-directory: zsigma-us
         run: python fetch_zsigma_us.py
 
       - name: 台股:抓資料並計算指標
         id: tw
+        if: steps.plan.outputs.tw == 'true'
         continue-on-error: true
         working-directory: zsigma-tw
         run: python fetch_zsigma_tw.py
 
-      # 某一邊失敗時沿用網站上目前的版本,另一邊照常更新
+      # 沒更新(或失敗)的市場沿用網站上目前的版本
       - name: 準備網站檔案
+        env:
+          US: ${{ steps.us.outcome }}
+          TW: ${{ steps.tw.outcome }}
         run: |
           mkdir -p _site/tw
           touch _site/.nojekyll
-          if [ "${{ steps.us.outcome }}" = success ]; then
+          if [ "$US" = success ]; then
             cp "zsigma-us/Zsigma籌碼掃描_美股.html" _site/index.html
           else
-            echo "::warning::美股更新失敗,沿用網站上的舊版"
-            curl -fsSL "$SITE/" -o _site/index.html
+            [ "$US" = failure ] && echo "::warning::美股更新失敗,沿用網站上的舊版"
+            curl -fsSL "$SITE/" -o _site/index.html || cp zsigma-us/index.html _site/index.html
           fi
-          if [ "${{ steps.tw.outcome }}" = success ]; then
+          if [ "$TW" = success ]; then
             cp "zsigma-tw/Zsigma籌碼掃描_台股.html" _site/tw/index.html
           else
-            echo "::warning::台股更新失敗,沿用網站上的舊版"
+            [ "$TW" = failure ] && echo "::warning::台股更新失敗,沿用網站上的舊版"
             curl -fsSL "$SITE/tw/" -o _site/tw/index.html || cp zsigma-tw/index.html _site/tw/index.html
           fi
-          if [ "${{ steps.us.outcome }}" != success ] && [ "${{ steps.tw.outcome }}" != success ]; then
-            echo "::error::美股與台股都更新失敗"; exit 1
+          if [ "$US" != success ] && [ "$TW" != success ]; then
+            echo "::error::這次沒有任何市場更新成功"; exit 1
           fi
 
       - uses: actions/upload-pages-artifact@v3

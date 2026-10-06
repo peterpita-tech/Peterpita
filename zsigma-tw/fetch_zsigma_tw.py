@@ -23,7 +23,7 @@ import requests
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "zsigma-us"))
-from fetch_zsigma_us import UA, add_scores, download, metrics  # noqa: E402
+from fetch_zsigma_us import UA, add_scores, download, is_open, metrics  # noqa: E402
 
 COMMON = re.compile(r"^[1-9]\d{3}$")   # 4 碼普通股(排除 ETF / 權證 / 特別股)
 
@@ -117,6 +117,7 @@ def main():
     parks = [r["park"] for r in rows if r["park"] is not None]
     data = {
         "generatedAt": int(datetime.now(timezone.utc).timestamp() * 1000),
+        "intraday": is_open("Asia/Taipei", (9, 0), (13, 30)),
         "date": pd.Timestamp(last).strftime("%Y-%m-%d"),
         "tradingDays": max(len(df) for df in frames.values()),
         "total": len(rows),

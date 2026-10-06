@@ -170,7 +170,7 @@
 
   <footer>
     Zsigma 籌碼微結構掃描 · 框架源自 vocus.cc 三篇文章(加捷 4109 / 佶優 5452 / 鈦昇 8027)<br>
-    資料:TWSE / TPEx 代號表 + Yahoo Finance 日線(還原權值)· 每個交易日 15:30 自動更新 · 僅供研究參考,不構成投資建議 · 台股漲跌色:紅漲綠跌
+    資料:TWSE / TPEx 代號表 + Yahoo Finance 日線(還原權值)· 盤中每 30 分鐘、收盤後 15:30 自動更新(Yahoo 報價約延遲 20 分鐘) · 僅供研究參考,不構成投資建議 · 台股漲跌色:紅漲綠跌
   </footer>
 </div>
 
@@ -336,7 +336,9 @@ document.querySelectorAll(".preset").forEach(b=>b.onclick=()=>{
 
 function boot(data){
   DATA=data; rows=data.rows||[];
-  document.getElementById("meta").innerHTML=`資料日期 <b>${data.date}</b>(回溯 ${data.tradingDays} 交易日)· 全市場 <b>${data.total}</b> 檔普通股 · 資料來源 TWSE / TPEx + Yahoo Finance 日線`;
+  const upd=data.generatedAt?new Date(data.generatedAt).toLocaleString("zh-TW",{timeZone:"Asia/Taipei",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}):"";
+  const live=data.intraday?' <span style="color:var(--amber);font-weight:700">● 盤中</span>':"";
+  document.getElementById("meta").innerHTML=`資料日期 <b>${data.date}</b>${live} · 更新於 ${upd} · 回溯 ${data.tradingDays} 交易日 · 全市場 <b>${data.total}</b> 檔普通股 · 資料來源 TWSE / TPEx + Yahoo Finance 日線`;
   kpis(); apply();
 }
 

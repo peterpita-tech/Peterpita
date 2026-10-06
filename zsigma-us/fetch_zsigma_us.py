@@ -188,6 +188,12 @@ def add_scores(rows):
         r["score"] = round(float(v), 1)
 
 
+def is_open(tz, start, end):
+    """執行當下交易所是否在盤中(不考慮假日)。"""
+    now = pd.Timestamp.now(tz=tz)
+    return bool(now.weekday() < 5 and start <= (now.hour, now.minute) < end)
+
+
 # ---------------------------------------------------------------- main
 def main():
     ap = argparse.ArgumentParser(description="Zsigma 美股版資料抓取")
@@ -229,6 +235,7 @@ def main():
     parks = [r["park"] for r in rows if r["park"] is not None]
     data = {
         "generatedAt": int(datetime.now(timezone.utc).timestamp() * 1000),
+        "intraday": is_open("America/New_York", (9, 30), (16, 0)),
         "date": pd.Timestamp(last).strftime("%Y-%m-%d"),
         "tradingDays": days,
         "total": len(rows),
