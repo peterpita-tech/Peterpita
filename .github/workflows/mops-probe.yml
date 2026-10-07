@@ -10,14 +10,5 @@ jobs:
       - run: |
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
           p() { echo; echo "===== $*"; curl -sS -m 40 -A "$UA" -D - -o body "$@" | head -15; echo "--- size $(wc -c < body)"; head -c 700 body; echo; }
-          p https://www.tpex.org.tw/openapi/v1/mopsfe_t187ap04_O
-          p -H "Accept: application/json" https://www.tpex.org.tw/openapi/v1/mopsfe_t187ap04_O
-          p https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes
-          p https://www.tpex.org.tw/openapi/swagger.json
-          grep -o '"/[^"]*t187ap04[^"]*"' body || true
-          grep -o '"/mopsfe[^"]*"' body | head -40 || true
-          p -X POST -H "Content-Type: application/json" -d '{}' https://mops.twse.com.tw/mops/api/t05sr01_1
-          p https://mops.twse.com.tw/mops/api/t05sr01_1
-          p -X POST -d 'encodeURIComponent=1&step=0&firstin=1&off=1&TYPEK=all' https://mopsov.twse.com.tw/mops/web/ajax_t05sr01_1
-          p https://mopsov.twse.com.tw/mops/web/t05sr01_1
-          p https://openapi.twse.com.tw/v1/opendata/t187ap04_L
+          p https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap04_O
+          python3 -c "import json;d=json.load(open('body'));print(len(d));print(json.dumps(d[:2],ensure_ascii=False)[:1500])"

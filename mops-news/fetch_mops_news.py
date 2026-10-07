@@ -2,7 +2,7 @@
 
 資料來源(公開資訊觀測站「每日重大訊息」的官方開放資料):
     上市 https://openapi.twse.com.tw/v1/opendata/t187ap04_L
-    上櫃 https://www.tpex.org.tw/openapi/v1/mopsfe_t187ap04_O
+    上櫃 https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap04_O
 
 OpenAPI 只提供「當天」的重大訊息,所以每次執行都會和上一版 data.json 合併,
 累積保留最近 --days 天。
@@ -32,7 +32,7 @@ UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.3
                     "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
       "Accept": "application/json, text/plain, */*"}
 SOURCES = {"上市": "https://openapi.twse.com.tw/v1/opendata/t187ap04_L",
-           "上櫃": "https://www.tpex.org.tw/openapi/v1/mopsfe_t187ap04_O"}
+           "上櫃": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap04_O"}
 # 欄位名稱在兩個 OpenAPI 間略有不同(有時還帶空白),逐一嘗試
 FIELDS = {
     "date":   ("發言日期", "SpeakDate", "Date"),
@@ -78,6 +78,7 @@ def normalize(rec, mkt):
     r = {f: pick(rec, keys) for f, keys in FIELDS.items()}
     r["date"], r["time"] = roc_date(r["date"]), hms(r["time"])
     r["eventDate"] = roc_date(r["eventDate"]) or r["eventDate"]
+    r["subject"] = re.sub(r"\s*[\r\n]+\s*", "", r["subject"])   # 主旨常被硬斷行
     r["desc"] = re.sub(r"\r\n?", "\n", r["desc"]).strip()
     r["mkt"] = mkt
     return r if r["code"] and r["date"] and r["subject"] else None
