@@ -151,7 +151,7 @@
       </select>
       <span style="flex:1"></span>
       <button class="preset" data-p="strong">🔥 強勢鎖碼</button>
-      <button class="preset" data-p="cost">站上成本線</button>
+      <button class="preset" data-p="cost">💰 籌碼獲利≥70%</button>
       <button class="preset" data-p="hiz">⚡ 高Z極端</button>
       <button class="preset" data-p="vol">📈 爆量</button>
       <button class="preset" data-p="reset">清除</button>
@@ -173,7 +173,7 @@
     <div class="scroll">
       <table id="tbl">
         <thead><tr id="thr"></tr></thead>
-        <tbody id="tb"><tr><td colspan="18" class="loading">載入資料中 …</td></tr></tbody>
+        <tbody id="tb"><tr><td colspan="19" class="loading">載入資料中 …</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -181,10 +181,11 @@
   <div class="glossary">
     <h3>📚 指標說明</h3>
     <div class="gloss-grid">
-      <div class="gloss"><h4>強勢分數(0–100)</h4><p>Z-Score(30%)、月線乖離(20%)、成本線乖離(20%)、買盤集中度(20%)的全市場百分位排名,加上站上雙成本線結構(10%)。越高越貼近原文「強勢鎖碼」型態。</p></div>
+      <div class="gloss"><h4>強勢分數(0–100)</h4><p>Z-Score(30%)、月線乖離(20%)、贏家成本乖離(20%)、買盤集中度(20%)的全市場百分位排名,加上獲利比例(10%)。越高越貼近原文「強勢鎖碼」型態。</p></div>
       <div class="gloss"><h4>Z-Score 超額乖離</h4><p>(收盤 − MA20) / 20日標準差。|Z|≥2 屬統計極端區,動能強但回歸壓力高。</p></div>
-      <div class="gloss"><h4>贏家成本線(EMA15 收盤)</h4><p>近期獲利方加權平均成本的代理。價格站穩其上代表多方主導,常為回檔支撐。</p></div>
-      <div class="gloss"><h4>散戶受困成本線(EMA15 典型價)</h4><p>以(高+低+收)/3 的 EMA15 估套牢散戶成本帶;逼近時易見解套賣壓。</p></div>
+      <div class="gloss"><h4>贏家成本線(籌碼分布)</h4><p>近 60 日成交量攤在每日高低價區間、依天數衰減(半衰期 20 日)估出籌碼分布,<b>現價以下</b>(目前獲利)籌碼的平均成本。常為回檔支撐;現價離它越遠,獲利了結壓力越大。</p></div>
+      <div class="gloss"><h4>散戶受困成本線(籌碼分布)</h4><p>同一籌碼分布中<b>現價以上</b>(目前套牢)籌碼的平均成本,代表上檔解套賣壓的位置。創區間新高時沒有套牢籌碼,顯示「—」。</p></div>
+      <div class="gloss"><h4>獲利比例</h4><p>籌碼分布中成本低於現價的比例。≥70% 多數人賺錢、上檔壓力小;≤30% 多數人套牢。兩條成本線距離越遠,代表籌碼越分散。</p></div>
       <div class="gloss"><h4>帕金森波動率</h4><p>以 20 日高低價估計、年化(%)的波動率。數值放大代表震幅擴張、行情活躍。</p></div>
       <div class="gloss"><h4>買盤集中度(估)</h4><p>20日「成交額 × K棒收盤位置」的 Gini 係數,代理買盤是否集中於少數大量上攻日。<b>非原文 Buy_Gini</b>(後者需分點資料),僅 OHLCV 近似。</p></div>
       <div class="gloss"><h4>量比</h4><p>今日成交量 ÷ 前 19 日平均量。≥2 代表明顯爆量,常伴隨消息或資金進駐。</p></div>
@@ -225,7 +226,9 @@ const COLS=[
   {k:"ma20",t:"月線MA20",fmt:r=>f(r.ma20,2)},
   {k:"biasMA",t:"乖離%(月)",fmt:r=>`<span class="${cls(r.biasMA)}">${sgn(r.biasMA)}%</span>`},
   {k:"costW",t:"贏家成本",fmt:r=>f(r.costW,2)},
-  {k:"biasW",t:"乖離%(成本)",fmt:r=>`<span class="${cls(r.biasW)}">${sgn(r.biasW)}%</span>`},
+  {k:"biasW",t:"乖離%(贏家)",fmt:r=>`<span class="${cls(r.biasW)}">${sgn(r.biasW)}%</span>`},
+  {k:"costTR",t:"受困成本",fmt:r=>f(r.costTR,2)},
+  {k:"winPct",t:"獲利比例",fmt:r=>r.winPct==null?"—":`<span class="${r.winPct>=70?'up':(r.winPct<=30?'down':'neu')}">${f(r.winPct,0)}%</span>`},
   {k:"z",t:"Z-Score",fmt:r=>`<span class="${r.z>=2?'up':(r.z<=-2?'down':'neu')}">${f(r.z,2)}</span>`},
   {k:"park",t:"波動率",fmt:r=>f(r.park,1)},
   {k:"conc",t:"集中度(估)",fmt:r=>f(r.conc,3)},
@@ -256,7 +259,7 @@ function kpis(){
   document.getElementById("kpis").innerHTML=[
     `<div class="kpi"><div class="k">掃描檔數</div><div class="v">${d.total} <small>檔</small></div><div class="k" style="margin-top:4px">NASDAQ ${d.nasdaq} · NYSE ${d.nyse} · AMEX ${d.amex}</div></div>`,
     `<div class="kpi"><div class="k">站上月線</div><div class="v">${pma.toFixed(0)}<small>%</small></div><div class="breadth"><div class="f" style="width:${pma}%"></div></div></div>`,
-    `<div class="kpi"><div class="k">站上贏家成本線</div><div class="v">${pcost.toFixed(0)}<small>%</small></div><div class="breadth"><div class="f" style="width:${pcost}%"></div></div></div>`,
+    `<div class="kpi"><div class="k">多數籌碼獲利(獲利比例≥50%)</div><div class="v">${pcost.toFixed(0)}<small>%</small></div><div class="breadth"><div class="f" style="width:${pcost}%"></div></div></div>`,
     `<div class="kpi"><div class="k">高Z 極端(Z≥2)</div><div class="v">${d.hiZ} <small>檔</small></div></div>`,
     `<div class="kpi"><div class="k">平均波動率</div><div class="v">${f(d.avgPark,1)}</div></div>`,
   ].join("");
@@ -273,6 +276,7 @@ function apply(){
       if(!(r.code.toLowerCase().includes(q)||r.name.toLowerCase().includes(q))) return false;
     }
     if(state.preset==="vol" && !(r.volR>=2 && r.chg>0)) return false;
+    if(state.preset==="cost" && !(r.winPct>=70)) return false;
     if(state.fz>-1 && r.z<state.fz) return false;
     if(state.fb>-10 && r.biasMA<state.fb) return false;
     if(state.fc>0 && (r.conc==null||r.conc<state.fc)) return false;
@@ -299,8 +303,11 @@ function apply(){
 
 let chart=null;
 function openModal(r){
-  const aboveTxt=(r.close>r.costW&&r.close>r.costTR)?'<span class="up">站上雙成本線(多方掌控)</span>'
-    :(r.close<r.costW&&r.close<r.costTR)?'<span class="down">跌破雙成本線(籌碼鬆動)</span>':'<span class="neu">成本線之間(拉鋸)</span>';
+  const wp=r.winPct;
+  const aboveTxt=wp==null?'<span class="neu">籌碼資料不足</span>'
+    :wp>=80?`<span class="up">${f(wp,0)}% 籌碼獲利(多方掌控)</span>`
+    :wp<=20?`<span class="down">${f(wp,0)}% 籌碼獲利(普遍套牢)</span>`
+    :`<span class="neu">${f(wp,0)}% 籌碼獲利(多空拉鋸)</span>`;
   document.getElementById("modal").innerHTML=`
     <div class="mh">
       <div><h2>${esc(r.name)} <span style="color:var(--dim)">${esc(r.code)}</span> <span class="mk ${r.mkt}">${r.mkt}</span></h2>
@@ -312,7 +319,9 @@ function openModal(r){
       <div class="mcards">
         <div class="mcard"><div class="k">Z-Score</div><div class="v ${r.z>=2?'up':(r.z<=-2?'down':'')}">${f(r.z,3)}</div></div>
         <div class="mcard"><div class="k">vs月線乖離</div><div class="v ${cls(r.biasMA)}">${sgn(r.biasMA)}%</div></div>
-        <div class="mcard"><div class="k">vs成本乖離</div><div class="v ${cls(r.biasW)}">${sgn(r.biasW)}%</div></div>
+        <div class="mcard"><div class="k">高於贏家成本</div><div class="v ${cls(r.biasW)}">${sgn(r.biasW)}%</div></div>
+        <div class="mcard"><div class="k">距受困成本(上檔壓力)</div><div class="v">${r.biasTR==null?"無套牢":sgn(r.biasTR)+"%"}</div></div>
+        <div class="mcard"><div class="k">獲利比例</div><div class="v">${r.winPct==null?"—":f(r.winPct,0)+"%"}</div></div>
         <div class="mcard"><div class="k">帕金森波動率</div><div class="v">${f(r.park,2)}</div></div>
         <div class="mcard"><div class="k">買盤集中度(估)</div><div class="v">${f(r.conc,3)}</div></div>
         <div class="mcard"><div class="k">量比</div><div class="v">${f(r.volR,2)}</div></div>
@@ -324,8 +333,8 @@ function openModal(r){
     </div>`;
   document.getElementById("overlay").classList.add("show");
   const upC=getComputedStyle(document.documentElement).getPropertyValue("--up").trim();
-  const lv=[{l:"收盤",v:r.close,c:upC},{l:"散戶受困線",v:r.costTR,c:"#a779ff"},
-            {l:"贏家成本線",v:r.costW,c:"#ffb020"},{l:"月線MA20",v:r.ma20,c:"#4da3ff"}].sort((a,b)=>b.v-a.v);
+  const lv=[{l:"收盤",v:r.close,c:upC},{l:"受困成本線",v:r.costTR,c:"#a779ff"},
+            {l:"贏家成本線",v:r.costW,c:"#ffb020"},{l:"月線MA20",v:r.ma20,c:"#4da3ff"}].filter(x=>x.v!=null).sort((a,b)=>b.v-a.v);
   if(chart) chart.destroy();
   if(typeof Chart==="undefined") return;   // CDN 未載入時略過圖表
   chart=new Chart(document.getElementById("mc"),{type:"bar",
@@ -378,7 +387,7 @@ document.querySelectorAll(".preset").forEach(b=>b.onclick=()=>{
   state.preset=p;
   document.querySelectorAll(".preset").forEach(x=>x.classList.toggle("on",x===b));
   if(p==="strong"){setS("fs",60);setS("fc",0.6);setS("fd",2);state.sortKey="score";state.sortDir=-1;}
-  else if(p==="cost"){setS("fb",0);state.sortKey="biasW";state.sortDir=-1;}
+  else if(p==="cost"){state.sortKey="winPct";state.sortDir=-1;}
   else if(p==="hiz"){setS("fz",2);state.sortKey="z";state.sortDir=-1;}
   else if(p==="vol"){setS("fd",1);state.sortKey="volR";state.sortDir=-1;}
   apply();

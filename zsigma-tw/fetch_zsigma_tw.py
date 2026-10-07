@@ -110,8 +110,7 @@ def main():
     rows = [r for r in rows if r["_last"] == last]
     add_scores(rows)
     for r in rows:
-        for k in ("_both", "_one", "_last"):
-            r.pop(k)
+        r.pop("_last")
     rows.sort(key=lambda r: -r["score"])
 
     parks = [r["park"] for r in rows if r["park"] is not None]

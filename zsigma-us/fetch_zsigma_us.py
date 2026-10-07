@@ -33,7 +33,9 @@ EXCLUDE_WORDS = ("warrant", "unit", " right", "preferred", "depositary shares re
                  "notes due", "debenture", "% series", "subordinated")
 
 WIN = 20          # 月線 / Z-Score / 集中度 / 波動率視窗
-EMA_SPAN = 15     # 成本線 EMA
+CHIP_WIN = 60     # 籌碼分布回溯天數
+HALF_LIFE = 20    # 籌碼權重半衰期(天):越舊的成交量權重越低,模擬籌碼換手
+CHIP_PTS = 12     # 每天把成交量平均攤在 低~高 之間的價位數
 
 
 # ---------------------------------------------------------------- universe
@@ -134,15 +136,36 @@ def gini(x):
     return float((2 * np.arange(1, n + 1) - n - 1).dot(x) / (n * s))
 
 
+def chip_costs(df, close):
+    """籌碼分布:近 CHIP_WIN 日每天的成交量平均攤在當日 低~高 價位上,並依天數衰減。
+    以現價切開 → 贏家成本 = 現價以下(獲利)籌碼的平均成本,
+                 受困成本 = 現價以上(套牢)籌碼的平均成本,獲利比例 = 獲利籌碼占比。"""
+    t = df.iloc[-CHIP_WIN:]
+    lo, hi = t["Low"].to_numpy(float), t["High"].to_numpy(float)
+    vol = t["Volume"].fillna(0).to_numpy(float)
+    age = np.arange(len(t))[::-1]
+    day_w = vol * 0.5 ** (age / HALF_LIFE) / CHIP_PTS
+    frac = (np.arange(CHIP_PTS) + 0.5) / CHIP_PTS
+    px = (lo[:, None] + (hi - lo)[:, None] * frac[None, :]).ravel()
+    w = np.repeat(day_w, CHIP_PTS)
+    tot = w.sum()
+    if not tot > 0:
+        return None, None, None
+    win = px <= close
+    ww, wt = w[win].sum(), w[~win].sum()
+    cost_w = float((px[win] * w[win]).sum() / ww) if ww > 0 else None
+    cost_tr = float((px[~win] * w[~win]).sum() / wt) if wt > 0 else None
+    return cost_w, cost_tr, float(ww / tot * 100)
+
+
 def metrics(df):
     if len(df) < WIN + 5:
         return None
-    c, h, l, v = df["Close"], df["High"], df["Low"], df["Volume"].fillna(0)
+    c = df["Close"]
     close, prev = float(c.iloc[-1]), float(c.iloc[-2])
     ma = c.rolling(WIN).mean().iloc[-1]
     sd = c.rolling(WIN).std().iloc[-1]
-    cost_w = c.ewm(span=EMA_SPAN, adjust=False).mean().iloc[-1]
-    cost_tr = ((h + l + c) / 3).ewm(span=EMA_SPAN, adjust=False).mean().iloc[-1]
+    cost_w, cost_tr, win_pct = chip_costs(df, close)
 
     tail = df.iloc[-WIN:]
     th, tl, tc, tv = tail["High"], tail["Low"], tail["Close"], tail["Volume"].fillna(0)
@@ -159,29 +182,29 @@ def metrics(df):
         "close": round(close, 2),
         "chg": round((close / prev - 1) * 100, 2) if prev else 0.0,
         "ma20": round(float(ma), 2),
-        "costW": round(float(cost_w), 2),
-        "costTR": round(float(cost_tr), 2),
+        "costW": round(cost_w, 2) if cost_w else None,
+        "costTR": round(cost_tr, 2) if cost_tr else None,
         "biasMA": round((close / ma - 1) * 100, 2),
-        "biasW": round((close / cost_w - 1) * 100, 2),
+        "biasW": round((close / cost_w - 1) * 100, 2) if cost_w else None,     # 高於贏家成本 %
+        "biasTR": round((cost_tr / close - 1) * 100, 2) if cost_tr else None,  # 距受困成本 %(上檔壓力)
+        "winPct": round(win_pct, 1) if win_pct is not None else None,        # 獲利比例 %
         "z": round(float((close - ma) / sd), 4) if sd and sd > 0 else 0.0,
         "park": round(park, 2) if park is not None else None,
         "conc": round(conc, 4) if conc is not None else None,
         "dv": round(dv20 / 1e6, 2),                             # 20日均成交額 (百萬美元)
         "volR": round(float(tv.iloc[-1]) / vol_avg, 2) if vol_avg else None,  # 量比
         "aboveMA": bool(close > ma),
-        "aboveCost": bool(close > cost_w),
-        "_both": bool(close > cost_w and close > cost_tr),
-        "_one": bool(close > cost_w or close > cost_tr),
+        "aboveCost": bool(win_pct is not None and win_pct >= 50),   # 多數籌碼獲利
         "_last": df.index[-1],
     }
 
 
 def add_scores(rows):
-    """強勢分數 = Z(30%)、月線乖離(20%)、成本乖離(20%)、集中度(20%) 的全市場百分位
-    + 雙成本線結構(10%:站上雙線 1、單線 0.5、跌破 0)。"""
+    """強勢分數 = Z(30%)、月線乖離(20%)、贏家成本乖離(20%)、集中度(20%) 的全市場百分位
+    + 獲利比例(10%)。"""
     d = pd.DataFrame(rows)
     pr = lambda k: d[k].rank(pct=True).fillna(0)  # noqa: E731
-    struct = np.where(d["_both"], 1.0, np.where(d["_one"], 0.5, 0.0))
+    struct = d["winPct"].fillna(0) / 100
     s = 100 * (0.30 * pr("z") + 0.20 * pr("biasMA") + 0.20 * pr("biasW")
                + 0.20 * pr("conc") + 0.10 * struct)
     for r, v in zip(rows, s):
@@ -226,8 +249,7 @@ def main():
     rows = [r for r in rows if r["_last"] == last]
     add_scores(rows)
     for r in rows:
-        for k in ("_both", "_one", "_last"):
-            r.pop(k)
+        r.pop("_last")
     rows.sort(key=lambda r: -r["score"])
 
     days = max(len(df) for df in frames.values())
