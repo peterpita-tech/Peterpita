@@ -60,6 +60,14 @@ jobs:
         working-directory: zsigma-us
         run: python fetch_zsigma_us.py
 
+      # 台股代號清單一天只需抓一次(腳本會判斷快取是否超過 20 小時)
+      - uses: actions/cache@v4
+        if: steps.plan.outputs.tw == 'true'
+        with:
+          path: zsigma-tw/.universe_cache.json
+          key: tw-universe-${{ github.run_id }}
+          restore-keys: tw-universe-
+
       - name: 台股:抓資料並計算指標
         id: tw
         if: steps.plan.outputs.tw == 'true'

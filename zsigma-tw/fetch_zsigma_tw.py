@@ -15,6 +15,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -38,46 +39,68 @@ ARTICLES = {
 }
 
 
-def openapi_universe():
+OPENAPI = {"上市": ("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", "Code", "Name"),
+           "上櫃": ("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes",
+                    "SecuritiesCompanyCode", "CompanyName")}
+ISIN_MODE = {"上市": 2, "上櫃": 4}
+CACHE = HERE / ".universe_cache.json"
+CACHE_HOURS = 20
+
+
+def openapi_market(mkt):
     """TWSE / TPEx OpenAPI 每日收盤行情 → 代號、名稱。"""
-    out = []
-    srcs = [("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", "上市", "Code", "Name"),
-            ("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes", "上櫃",
-             "SecuritiesCompanyCode", "CompanyName")]
-    for url, mkt, kc, kn in srcs:
-        r = requests.get(url, headers=UA, timeout=30)
-        r.raise_for_status()
-        rows = [x for x in r.json() if COMMON.match(str(x.get(kc, "")).strip())]
-        if not rows:
-            raise RuntimeError(f"{mkt} 清單為空")
-        out += [{"code": x[kc].strip(), "name": x[kn].strip(), "mkt": mkt} for x in rows]
+    url, kc, kn = OPENAPI[mkt]
+    r = requests.get(url, headers=UA, timeout=30)
+    r.raise_for_status()
+    out = [{"code": x[kc].strip(), "name": x[kn].strip(), "mkt": mkt}
+           for x in r.json() if COMMON.match(str(x.get(kc, "")).strip())]
+    if not out:
+        raise RuntimeError("清單為空")
     return out
 
 
-def isin_universe():
-    """備援:證交所 ISIN 代號表 (strMode=2 上市、4 上櫃)。"""
-    out = []
-    for mode, mkt in ((2, "上市"), (4, "上櫃")):
-        r = requests.get(f"https://isin.twse.com.tw/isin/C_public.jsp?strMode={mode}",
-                         headers=UA, timeout=60)
-        r.encoding = "cp950"
-        for code, name in re.findall(r"<td[^>]*>\s*(\d{4})[\s　]+([^<]+?)\s*</td>", r.text):
-            if COMMON.match(code):
-                out.append({"code": code, "name": name.strip(), "mkt": mkt})
+def isin_market(mkt):
+    """備援:證交所 ISIN 代號表(較慢)。"""
+    r = requests.get(f"https://isin.twse.com.tw/isin/C_public.jsp?strMode={ISIN_MODE[mkt]}",
+                     headers=UA, timeout=60)
+    r.encoding = "cp950"
+    out = [{"code": code, "name": name.strip(), "mkt": mkt}
+           for code, name in re.findall(r"<td[^>]*>\s*(\d{4})[\s\u3000]+([^<]+?)\s*</td>", r.text)
+           if COMMON.match(code)]
     if not out:
-        raise RuntimeError("ISIN 清單為空")
+        raise RuntimeError("清單為空")
     return out
 
 
 def get_universe():
-    for fn in (openapi_universe, isin_universe):
+    cached = None
+    if CACHE.exists():
         try:
-            u = fn()
-            print(f"[universe] {fn.__name__}: {len(u)} 檔")
-            return u
-        except Exception as e:  # noqa: BLE001
-            print(f"[universe] {fn.__name__} 失敗: {e}", file=sys.stderr)
-    sys.exit("無法取得台股代號清單")
+            cached = json.loads(CACHE.read_text(encoding="utf-8"))
+        except ValueError:
+            pass
+    if cached and time.time() - CACHE.stat().st_mtime < CACHE_HOURS * 3600:
+        print(f"[universe] 使用快取: {len(cached)} 檔")
+        return cached
+
+    out = []
+    for mkt in ("上市", "上櫃"):
+        for fn in (openapi_market, isin_market):
+            try:
+                u = fn(mkt)
+                print(f"[universe] {mkt} {fn.__name__}: {len(u)} 檔")
+                out += u
+                break
+            except Exception as e:  # noqa: BLE001
+                print(f"[universe] {mkt} {fn.__name__} 失敗: {e}", file=sys.stderr)
+        else:
+            old = [u for u in (cached or []) if u["mkt"] == mkt]
+            if not old:
+                sys.exit(f"無法取得{mkt}代號清單")
+            print(f"[universe] {mkt} 沿用舊快取: {len(old)} 檔")
+            out += old
+    CACHE.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    return out
 
 
 def main():
@@ -107,7 +130,7 @@ def main():
         sys.exit("沒有任何股票資料")
 
     last = max(r["_last"] for r in rows)
-    rows = [r for r in rows if r["_last"] == last]
+    rows = [r for r in rows if r["_last"] >= last - pd.offsets.BDay(3)]   # 排除停牌 / 下市
     add_scores(rows)
     for r in rows:
         r.pop("_last")

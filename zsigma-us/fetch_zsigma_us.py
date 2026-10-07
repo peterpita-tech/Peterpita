@@ -100,7 +100,7 @@ def get_universe(tickers=None):
 
 
 # ---------------------------------------------------------------- prices
-def download(codes, period, chunk=200):
+def download(codes, period, chunk=200, retry=True):
     frames = {}
     for i in range(0, len(codes), chunk):
         part = codes[i:i + chunk]
@@ -124,6 +124,11 @@ def download(codes, period, chunk=200):
             if len(sub):
                 frames[t] = sub
     print()
+    missing = [t for t in codes if t not in frames]
+    if retry and missing:
+        print(f"[price] {len(missing)} 檔沒抓到(可能被限流),30 秒後補抓")
+        time.sleep(30)
+        frames.update(download(missing, period, chunk=50, retry=False))
     return frames
 
 
@@ -246,7 +251,7 @@ def main():
 
     # 只保留最新交易日的資料(排除停牌 / 下市)
     last = max(r["_last"] for r in rows)
-    rows = [r for r in rows if r["_last"] == last]
+    rows = [r for r in rows if r["_last"] >= last - pd.offsets.BDay(3)]
     add_scores(rows)
     for r in rows:
         r.pop("_last")
