@@ -1,4 +1,4 @@
-name: Zsigma 掃描(美股 + 台股)
+name: Zsigma 掃描(美股 + 台股)+ 台股重大訊息
 
 on:
   schedule:
@@ -8,11 +8,14 @@ on:
     - cron: "30 7 * * 1-5"
     # 美股收盤後:台灣隔日 06:30(只更新美股)
     - cron: "30 22 * * 1-5"
+    # 重大訊息:台灣每天 21:50(含假日;其他排程也會順便更新)
+    - cron: "50 13 * * *"
   workflow_dispatch:        # 可在 Actions 頁面手動執行
   push:
     paths:
       - "zsigma-us/**"
       - "zsigma-tw/**"
+      - "mops-news/**"
       - ".github/workflows/zsigma-us.yml"
 
 permissions:
@@ -46,6 +49,7 @@ jobs:
         run: |
           case "${{ github.event.schedule }}" in
             "30 22 * * 1-5") echo "us=true"  >> "$GITHUB_OUTPUT"; echo "tw=false" >> "$GITHUB_OUTPUT" ;;
+            "50 13 * * *")   echo "us=false" >> "$GITHUB_OUTPUT"; echo "tw=false" >> "$GITHUB_OUTPUT" ;;
             "")              echo "us=true"  >> "$GITHUB_OUTPUT"; echo "tw=true"  >> "$GITHUB_OUTPUT" ;;
             *)               echo "us=false" >> "$GITHUB_OUTPUT"; echo "tw=true"  >> "$GITHUB_OUTPUT" ;;
           esac
@@ -75,13 +79,21 @@ jobs:
         working-directory: zsigma-tw
         run: python fetch_zsigma_tw.py
 
+      # 重大訊息每次都更新;OpenAPI 只給當天資料,和網站上的上一版合併累積歷史
+      - name: 台股重大訊息:公開資訊觀測站
+        id: news
+        continue-on-error: true
+        working-directory: mops-news
+        run: python fetch_mops_news.py --prev "$SITE/news/data.json"
+
       # 沒更新(或失敗)的市場沿用網站上目前的版本
       - name: 準備網站檔案
         env:
           US: ${{ steps.us.outcome }}
           TW: ${{ steps.tw.outcome }}
+          NEWS: ${{ steps.news.outcome }}
         run: |
-          mkdir -p _site/tw
+          mkdir -p _site/tw _site/news
           touch _site/.nojekyll
           if [ "$US" = success ]; then
             cp "zsigma-us/Zsigma籌碼掃描_美股.html" _site/index.html
@@ -95,7 +107,14 @@ jobs:
             [ "$TW" = failure ] && echo "::warning::台股更新失敗,沿用網站上的舊版"
             curl -fsSL "$SITE/tw/" -o _site/tw/index.html || cp zsigma-tw/index.html _site/tw/index.html
           fi
-          if [ "$US" != success ] && [ "$TW" != success ]; then
+          cp mops-news/index.html _site/news/index.html
+          if [ "$NEWS" = success ]; then
+            cp mops-news/data.json _site/news/data.json
+          else
+            echo "::warning::重大訊息更新失敗,沿用網站上的舊版"
+            curl -fsSL "$SITE/news/data.json" -o _site/news/data.json || true
+          fi
+          if [ "$US" != success ] && [ "$TW" != success ] && [ "$NEWS" != success ]; then
             echo "::error::這次沒有任何市場更新成功"; exit 1
           fi
 

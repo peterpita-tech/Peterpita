@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台股重大訊息</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#141925; --panel2:#1b2231; --line:#2a3346;
+    --txt:#e6ebf2; --muted:#8b97ad; --dim:#5f6b80;
+    --accent:#4da3ff; --amber:#ffb020; --up:#ff4d4f; --down:#13c267; --purple:#a779ff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:"Noto Sans TC","Segoe UI",-apple-system,sans-serif;line-height:1.5;padding:20px 16px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1100px;margin:0 auto}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  h1{font-size:22px;font-weight:700}
+  .meta{color:var(--muted);font-size:12.5px;margin-top:3px}
+  .meta b{color:var(--txt)}
+  .links{display:flex;gap:8px;flex-wrap:wrap}
+  .switch{background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:7px 14px;border-radius:9px;font-size:13px;font-weight:600;text-decoration:none}
+  .switch:hover{border-color:var(--accent);color:var(--txt)}
+  .warn{background:rgba(255,176,32,.08);border:1px solid rgba(255,176,32,.3);color:var(--amber);font-size:12px;padding:7px 13px;border-radius:8px;margin-top:12px}
+  .controls{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin:16px 0 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  select,input{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:13.5px;font-family:inherit}
+  input[type=search]{flex:1;min-width:180px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;width:100%}
+  .chip{background:var(--panel2);border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:4px 11px;font-size:12.5px;cursor:pointer}
+  .chip.on{border-color:var(--accent);color:var(--txt);background:rgba(77,163,255,.14)}
+  .chip i{font-style:normal;color:var(--dim);margin-left:4px}
+  .count{color:var(--muted);font-size:12.5px;margin-bottom:8px}
+  h2{font-size:14px;color:var(--muted);font-weight:600;margin:18px 0 8px;position:sticky;top:0;background:var(--bg);padding:6px 0;z-index:1}
+  details{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:8px}
+  details[open]{border-color:#3a4864}
+  summary{list-style:none;cursor:pointer;padding:10px 14px;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:baseline}
+  summary::-webkit-details-marker{display:none}
+  .who{font-weight:700;white-space:nowrap;font-size:14px}
+  .who small{color:var(--muted);font-weight:500;margin-left:6px;font-size:12px}
+  .subj{font-size:14px;min-width:0;overflow-wrap:anywhere}
+  .sub2{grid-column:2;color:var(--dim);font-size:12px;display:flex;gap:8px;flex-wrap:wrap}
+  .tag{border-radius:5px;padding:0 6px;font-size:11.5px;border:1px solid currentColor}
+  .t-上市{color:var(--accent)} .t-上櫃{color:var(--purple)}
+  .t-cat{color:var(--amber)}
+  .body{padding:0 14px 14px;font-size:13.5px;color:#cfd7e3;white-space:pre-wrap;overflow-wrap:anywhere;border-top:1px solid var(--line);padding-top:10px;margin:0 14px 0}
+  .body + .foot{padding:8px 14px 12px;font-size:12px;color:var(--dim)}
+  mark{background:rgba(255,176,32,.3);color:inherit;border-radius:2px}
+  .more{display:block;margin:14px auto;background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:8px 20px;border-radius:9px;cursor:pointer;font-size:13px}
+  .more[hidden]{display:none}
+  .empty{color:var(--muted);text-align:center;padding:40px 0}
+  @media (max-width:600px){ summary{grid-template-columns:1fr} .sub2{grid-column:1} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>台股重大訊息 · 公開資訊觀測站</h1>
+      <div class="meta" id="meta">載入中…</div>
+    </div>
+    <div class="links">
+      <a class="switch" href="../tw/">台股掃描</a>
+      <a class="switch" href="../">美股掃描</a>
+      <a class="switch" href="https://mops.twse.com.tw/mops/#/web/t05sr01_1" target="_blank" rel="noopener">觀測站原站 ↗</a>
+    </div>
+  </div>
+  <div id="warn"></div>
+
+  <div class="controls">
+    <select id="day" aria-label="日期"></select>
+    <select id="mkt" aria-label="市場"><option value="">上市 + 上櫃</option><option>上市</option><option>上櫃</option></select>
+    <input type="search" id="q" placeholder="代號、公司名稱或關鍵字(空白分隔可多個)">
+    <div class="chips" id="cats"></div>
+  </div>
+  <div class="count" id="count"></div>
+  <div id="list"></div>
+  <button class="more" id="more" hidden>顯示更多</button>
+</div>
+
+<script>
+// 依主旨關鍵字粗分類(只看主旨,僅供篩選)
+const CATS = [
+  ["財報/自結", /財務報告|財報|自結|營收|損益|EPS|每股盈餘|盈餘/],
+  ["股利/除權息", /股利|除權|除息|配息|配股|盈餘分配/],
+  ["董事會/股東會", /董事會|股東會|股東常會|股東臨時會|董事|監察人|獨立董事|審計委員/],
+  ["人事異動", /總經理|發言人|財務主管|會計主管|稽核主管|執行長|董事長|異動|辭任|解任|新任/],
+  ["資產/投資", /取得|處分|投資|增資|減資|轉投資|資產|購置|租賃|背書保證|資金貸與|合併|收購|分割/],
+  ["籌資/證券", /公司債|可轉換|私募|現金增資|庫藏股|買回|發行|有價證券/],
+  ["澄清/媒體", /澄清|媒體|報導|說明.*報載|新聞/],
+  ["法說會", /法人說明會|法說|業績發表會|投資人說明會/],
+  ["訴訟/裁罰", /訴訟|裁罰|罰鍰|判決|起訴|搜索|偵查|仲裁/],
+];
+const catOf = s => { for (const [n, re] of CATS) if (re.test(s)) return n; return "其他"; };
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const PAGE = 150;
+let rows = [], cat = "", shown = PAGE;
+
+function hl(s, terms) {
+  let h = esc(s);
+  for (const t of terms) if (t) h = h.replace(new RegExp(esc(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), m => `<mark>${m}</mark>`);
+  return h;
+}
+
+function filtered(ignoreCat) {
+  const day = $("day").value, mkt = $("mkt").value;
+  const terms = $("q").value.trim().split(/\s+/).filter(Boolean);
+  return rows.filter(r =>
+    (!day || r.date === day) && (!mkt || r.mkt === mkt) && (ignoreCat || !cat || r.cat === cat) &&
+    terms.every(t => (r.code + r.name + r.subject + r.desc).toLowerCase().includes(t.toLowerCase())));
+}
+
+function render() {
+  const terms = $("q").value.trim().split(/\s+/).filter(Boolean);
+  const base = filtered(true), counts = {};
+  for (const r of base) counts[r.cat] = (counts[r.cat] || 0) + 1;
+  $("cats").innerHTML = [["", base.length], ...[...CATS.map(c => c[0]), "其他"].map(n => [n, counts[n] || 0])]
+    .filter(([n, c]) => !n || c).map(([n, c]) =>
+      `<span class="chip${n === cat ? " on" : ""}" data-c="${esc(n)}">${n || "全部"}<i>${c}</i></span>`).join("");
+
+  const list = filtered(false);
+  $("count").textContent = `共 ${list.length} 則`;
+  let html = "", lastDay = "";
+  for (const r of list.slice(0, shown)) {
+    if (r.date !== lastDay) { lastDay = r.date; html += `<h2>${r.date}</h2>`; }
+    html += `<details><summary>
+      <span class="who">${hl(r.code, terms)} ${hl(r.name, terms)}<small>${esc(r.time.slice(0, 5))}</small></span>
+      <span class="subj">${hl(r.subject, terms)}</span>
+      <span class="sub2"><span class="tag t-${r.mkt}">${r.mkt}</span><span class="tag t-cat">${r.cat}</span>
+        ${r.eventDate ? `<span>事實發生日 ${esc(r.eventDate)}</span>` : ""}</span>
+    </summary>
+    <div class="body">${hl(r.desc || "(無說明)", terms)}</div>
+    <div class="foot">${r.clause ? "符合條款:" + esc(r.clause) : ""}</div></details>`;
+  }
+  $("list").innerHTML = html || `<div class="empty">沒有符合條件的重大訊息</div>`;
+  $("more").hidden = list.length <= shown;
+}
+
+$("cats").onclick = e => { const c = e.target.closest(".chip"); if (c) { cat = c.dataset.c; shown = PAGE; render(); } };
+$("more").onclick = () => { shown += PAGE; render(); };
+for (const id of ["day", "mkt", "q"]) $(id).addEventListener("input", () => { shown = PAGE; render(); });
+
+fetch("data.json", {cache: "no-cache"}).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(d => {
+  rows = d.rows.map(r => ({...r, cat: catOf(r.subject)}));
+  const days = [...new Set(rows.map(r => r.date))];
+  $("day").innerHTML = `<option value="">全部日期(${days.length} 天)</option>` +
+    days.map(x => `<option${x === d.latest ? " selected" : ""}>${x}</option>`).join("");
+  const t = new Date(d.generatedAt).toLocaleString("zh-TW", {timeZone: "Asia/Taipei", hour12: false});
+  $("meta").innerHTML = `最新 <b>${d.latest}</b> · 累積近 ${d.days} 天共 <b>${d.total}</b> 則 · 更新於 ${t}`;
+  if (d.failed && d.failed.length)
+    $("warn").innerHTML = `<div class="warn">這次${d.failed.join("、")}資料抓取失敗,顯示的可能不完整。</div>`;
+  render();
+}).catch(e => { $("meta").textContent = "資料載入失敗:" + e.message; });
+</script>
+</body>
+</html>
