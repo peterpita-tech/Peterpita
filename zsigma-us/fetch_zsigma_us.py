@@ -1,4 +1,4 @@
-"""Zsigma 籌碼微結構掃描 · 美股版 資料抓取 / 指標計算
+"""籌碼結構掃描 · 美股版 資料抓取 / 指標計算
 
 用法:
     pip install -r requirements.txt
@@ -8,7 +8,7 @@
 
 輸出(與本檔同資料夾):
     data.js                       ← index.html 會讀這個
-    Zsigma籌碼掃描_美股.html        ← 資料內嵌的單檔版,可直接雙擊開啟
+    籌碼結構掃描_美股.html        ← 資料內嵌的單檔版,可直接雙擊開啟
 """
 import argparse
 import json
@@ -224,7 +224,7 @@ def is_open(tz, start, end):
 
 # ---------------------------------------------------------------- main
 def main():
-    ap = argparse.ArgumentParser(description="Zsigma 美股版資料抓取")
+    ap = argparse.ArgumentParser(description="籌碼結構掃描 美股版資料抓取")
     ap.add_argument("--tickers", help="只掃指定代號,逗號分隔")
     ap.add_argument("--period", default="3mo", help="回溯期間 (yfinance period,預設 3mo)")
     ap.add_argument("--min-price", type=float, default=1.0, help="最低股價 (美元,預設 1)")
@@ -278,8 +278,8 @@ def main():
 
     tpl = (HERE / "index.html").read_text(encoding="utf-8")
     embed = tpl.replace("<!--ZS_DATA-->", f"<script>{js}</script>")
-    (HERE / "Zsigma籌碼掃描_美股.html").write_text(embed, encoding="utf-8")
-    print(f"[done] {data['date']} · {len(rows)} 檔 (略過 {skipped}) → data.js / Zsigma籌碼掃描_美股.html")
+    (HERE / "籌碼結構掃描_美股.html").write_text(embed, encoding="utf-8")
+    print(f"[done] {data['date']} · {len(rows)} 檔 (略過 {skipped}) → data.js / 籌碼結構掃描_美股.html")
 
 
 if __name__ == "__main__":

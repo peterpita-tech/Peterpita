@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zsigma 籌碼微結構掃描 · 全台股</title>
+<title>籌碼結構掃描 · 全台股</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root{
@@ -18,13 +18,11 @@
   .wrap{max-width:1480px;margin:0 auto}
   h1{font-size:22px;font-weight:700;letter-spacing:.5px}
   h1 .sub{color:var(--accent)}
-  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px}
   .switch{background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:7px 14px;border-radius:9px;font-size:13px;font-weight:600;text-decoration:none}
   .switch:hover{border-color:var(--accent);color:var(--txt)}
   .meta{color:var(--muted);font-size:12.5px;margin-top:3px}
   .meta b{color:var(--txt)}
-  .disclaimer{background:rgba(255,176,32,.08);border:1px solid rgba(255,176,32,.3);color:var(--amber);
-    font-size:12px;padding:7px 13px;border-radius:8px;margin:12px 0 16px}
 
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
   .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 15px;box-shadow:var(--shadow)}
@@ -111,12 +109,11 @@
 <div class="wrap">
   <div class="top">
     <div>
-      <h1>Zsigma <span class="sub">籌碼微結構</span> 掃描 · 全台股</h1>
+      <h1><span class="sub">籌碼結構</span>掃描 · 全台股</h1>
       <div class="meta" id="meta">載入中 …</div>
     </div>
     <a class="switch" href="https://peterpita-tech.github.io/Peterpita/">🇺🇸 美股版 →</a>
   </div>
-  <div class="disclaimer">⚠ 本儀表板套用 Zsigma 金融模型實驗室文章之量化框架,以公開 OHLCV 重算全市場,屬技術研究用途,<b>不構成投資建議</b>。Buy_Gini 基尼係數與洗盤機率為原文 proprietary 指標(需分點資料),全市場改以「買盤集中度(估)」OHLCV 代理呈現;三篇原文標的另保留其真實 Gini。</div>
 
   <div class="kpis" id="kpis"></div>
 
@@ -170,7 +167,7 @@
   </div>
 
   <footer>
-    Zsigma 籌碼微結構掃描 · 框架源自 vocus.cc 三篇文章(加捷 4109 / 佶優 5452 / 鈦昇 8027)<br>
+    籌碼結構掃描 · 全台股 · 框架源自 vocus.cc Zsigma 金融模型實驗室三篇文章(加捷 4109 / 佶優 5452 / 鈦昇 8027)<br>
     資料:TWSE / TPEx 代號表 + Yahoo Finance 日線(還原權值)· 盤中每 30 分鐘、收盤後 15:30 自動更新(Yahoo 報價約延遲 20 分鐘) · 僅供研究參考,不構成投資建議 · 台股漲跌色:紅漲綠跌
   </footer>
 </div>

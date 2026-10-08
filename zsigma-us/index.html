@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zsigma 籌碼微結構掃描 · 美股</title>
+<title>籌碼結構掃描 · 美股</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root{
@@ -17,13 +17,11 @@
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--txt);font-family:"Noto Sans TC","Segoe UI",-apple-system,sans-serif;line-height:1.45;padding:20px;-webkit-font-smoothing:antialiased}
   .wrap{max-width:1480px;margin:0 auto}
-  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px}
   h1{font-size:22px;font-weight:700;letter-spacing:.5px}
   h1 .sub{color:var(--accent)}
   .meta{color:var(--muted);font-size:12.5px;margin-top:3px}
   .meta b{color:var(--txt)}
-  .disclaimer{background:rgba(255,176,32,.08);border:1px solid rgba(255,176,32,.3);color:var(--amber);
-    font-size:12px;padding:7px 13px;border-radius:8px;margin:12px 0 16px}
 
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
   .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 15px;box-shadow:var(--shadow)}
@@ -116,7 +114,7 @@
 <div class="wrap">
   <div class="top">
     <div>
-      <h1>Zsigma <span class="sub">籌碼微結構</span> 掃描 · 美股</h1>
+      <h1><span class="sub">籌碼結構</span>掃描 · 美股</h1>
       <div class="meta" id="meta">載入中 …</div>
     </div>
     <div class="row">
@@ -127,7 +125,6 @@
     </div>
     </div>
   </div>
-  <div class="disclaimer">⚠ 本儀表板套用 Zsigma 金融模型實驗室文章之量化框架,以公開 OHLCV 重算 NASDAQ / NYSE / AMEX 全市場,屬技術研究用途,<b>不構成投資建議</b>。美股無券商分點資料,原文 Buy_Gini 與洗盤機率無法重現,改以「買盤集中度(估)」OHLCV 代理呈現。</div>
 
   <div class="kpis" id="kpis"></div>
 
@@ -194,7 +191,7 @@
   </div>
 
   <footer>
-    Zsigma 籌碼微結構掃描 · 美股版 · 框架源自 vocus.cc Zsigma 金融模型實驗室<br>
+    籌碼結構掃描 · 美股版 · 框架源自 vocus.cc Zsigma 金融模型實驗室<br>
     資料:NASDAQ 代號表 + Yahoo Finance 日線(還原權值)· 僅供研究參考,不構成投資建議
   </footer>
 </div>

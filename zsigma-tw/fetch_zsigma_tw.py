@@ -1,4 +1,4 @@
-"""Zsigma 籌碼微結構掃描 · 全台股 資料抓取
+"""籌碼結構掃描 · 全台股 資料抓取
 
 指標計算與美股版共用 (../zsigma-us/fetch_zsigma_us.py)。
 
@@ -9,7 +9,7 @@
 
 輸出(與本檔同資料夾):
     data.js                  ← index.html 會讀這個
-    Zsigma籌碼掃描_台股.html   ← 資料內嵌的單檔版
+    籌碼結構掃描_台股.html   ← 資料內嵌的單檔版
 """
 import argparse
 import json
@@ -104,7 +104,7 @@ def get_universe():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Zsigma 台股版資料抓取")
+    ap = argparse.ArgumentParser(description="籌碼結構掃描 台股版資料抓取")
     ap.add_argument("--tickers", help="只掃指定代號,逗號分隔(需同時在代號清單中)")
     ap.add_argument("--period", default="3mo")
     a = ap.parse_args()
@@ -154,9 +154,9 @@ def main():
     js = "window.ZS_DATA = " + json.dumps(data, ensure_ascii=False) + ";"
     (HERE / "data.js").write_text(js, encoding="utf-8")
     tpl = (HERE / "index.html").read_text(encoding="utf-8")
-    (HERE / "Zsigma籌碼掃描_台股.html").write_text(
+    (HERE / "籌碼結構掃描_台股.html").write_text(
         tpl.replace("<!--ZS_DATA-->", f"<script>{js}</script>"), encoding="utf-8")
-    print(f"[done] {data['date']} · {len(rows)} 檔 → data.js / Zsigma籌碼掃描_台股.html")
+    print(f"[done] {data['date']} · {len(rows)} 檔 → data.js / 籌碼結構掃描_台股.html")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-# Zsigma 籌碼微結構掃描 · 全台股
+# 籌碼結構掃描 · 全台股
 
 線上版(盤中(09:00~13:30)每 30 分鐘、收盤後 15:30 自動更新):https://peterpita-tech.github.io/Peterpita/tw/
 

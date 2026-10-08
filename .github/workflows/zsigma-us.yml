@@ -1,4 +1,4 @@
-name: Zsigma 掃描(美股 + 台股)+ 台股重大訊息
+name: 籌碼結構掃描(美股 + 台股)+ 台股重大訊息
 
 on:
   schedule:
@@ -96,13 +96,13 @@ jobs:
           mkdir -p _site/tw _site/news
           touch _site/.nojekyll
           if [ "$US" = success ]; then
-            cp "zsigma-us/Zsigma籌碼掃描_美股.html" _site/index.html
+            cp "zsigma-us/籌碼結構掃描_美股.html" _site/index.html
           else
             [ "$US" = failure ] && echo "::warning::美股更新失敗,沿用網站上的舊版"
             curl -fsSL "$SITE/" -o _site/index.html || cp zsigma-us/index.html _site/index.html
           fi
           if [ "$TW" = success ]; then
-            cp "zsigma-tw/Zsigma籌碼掃描_台股.html" _site/tw/index.html
+            cp "zsigma-tw/籌碼結構掃描_台股.html" _site/tw/index.html
           else
             [ "$TW" = failure ] && echo "::warning::台股更新失敗,沿用網站上的舊版"
             curl -fsSL "$SITE/tw/" -o _site/tw/index.html || cp zsigma-tw/index.html _site/tw/index.html
