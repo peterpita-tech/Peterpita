@@ -1,0 +1,23 @@
+name: 玩股網可行性測試(一次性)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "probe/wantgoo_probe.py"
+      - ".github/workflows/wantgoo-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q requests
+      - run: python probe/wantgoo_probe.py
