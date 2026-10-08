@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>策略選股 · 台股</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#141925; --panel2:#1b2231; --line:#2a3346;
+    --txt:#e6ebf2; --muted:#8b97ad; --dim:#5f6b80;
+    --up:#ff4d4f; --down:#13c267; --upbg:rgba(255,77,79,.14); --downbg:rgba(19,194,103,.14);
+    --accent:#4da3ff; --amber:#ffb020; --purple:#a779ff;
+    --shadow:0 8px 28px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:"Noto Sans TC","Segoe UI",-apple-system,sans-serif;line-height:1.45;padding:20px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1280px;margin:0 auto}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  h1{font-size:22px;font-weight:700;letter-spacing:.5px}
+  h1 .sub{color:var(--accent)}
+  .meta{color:var(--muted);font-size:12.5px;margin-top:3px}
+  .meta b{color:var(--txt)}
+  .links{display:flex;gap:8px;flex-wrap:wrap}
+  .switch{background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:7px 14px;border-radius:9px;font-size:13px;font-weight:600;text-decoration:none}
+  .switch:hover{border-color:var(--accent);color:var(--txt)}
+  .stale{background:rgba(255,176,32,.08);border:1px solid rgba(255,176,32,.3);color:var(--amber);font-size:12.5px;padding:8px 13px;border-radius:8px;margin-bottom:14px;display:none}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);margin-bottom:14px}
+  .ph{padding:12px 16px;border-bottom:1px solid var(--line);font-size:14px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .ph small{color:var(--muted);font-weight:500;font-size:12px}
+  .pb{padding:14px 16px}
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-align:right;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:8px 10px;text-align:right;border-bottom:1px solid rgba(42,51,70,.5);font-variant-numeric:tabular-nums;white-space:nowrap}
+  th:nth-child(-n+3),td:nth-child(-n+3){text-align:left}
+  #overview th:nth-child(-n+3),#overview td:nth-child(-n+3){text-align:left}
+  #overview th:nth-child(n+3),#overview td:nth-child(n+3){text-align:right}
+  #overview tbody tr{cursor:pointer}
+  #overview tbody tr:hover{background:var(--panel2)}
+  .up{color:var(--up)} .down{color:var(--down)} .neu{color:var(--muted)}
+  .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600}
+  .chip.up{background:var(--upbg)} .chip.down{background:var(--downbg)}
+  .code a{color:var(--txt);font-weight:700;text-decoration:none}
+  .code a:hover{color:var(--accent);text-decoration:underline}
+  .ind{color:var(--muted);font-size:12px}
+
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:8px 15px;border-radius:20px;cursor:pointer;font-size:13px;font-weight:600}
+  .tab:hover{border-color:var(--accent);color:var(--txt)}
+  .tab.on{background:rgba(77,163,255,.16);border-color:var(--accent);color:var(--accent)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+  .kpi{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .kpi .k{color:var(--muted);font-size:11.5px}
+  .kpi .v{font-size:20px;font-weight:700;margin-top:2px}
+  .grid2{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+  .rules{list-style:none;font-size:13px;color:var(--muted)}
+  .rules li{padding:5px 0;border-bottom:1px dashed var(--line)}
+  .rules li::before{content:"✓ ";color:var(--accent)}
+  .rebal{margin-top:10px;font-size:12.5px;color:var(--amber)}
+  .chartbox{position:relative;height:300px}
+  .err{color:var(--amber);font-size:13px}
+  .empty{color:var(--muted);text-align:center;padding:30px}
+  footer{color:var(--dim);font-size:11.5px;text-align:center;margin-top:22px;line-height:1.7}
+  @media(max-width:860px){body{padding:12px}.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1><span class="sub">策略</span>選股 · 台股</h1>
+      <div class="meta" id="meta">載入中 …</div>
+    </div>
+    <div class="links">
+      <a class="switch" href="https://peterpita-tech.github.io/Peterpita/tw/">🇹🇼 籌碼掃描</a>
+      <a class="switch" href="https://peterpita-tech.github.io/Peterpita/">🇺🇸 美股</a>
+    </div>
+  </div>
+  <div class="stale" id="stale"></div>
+
+  <div class="panel">
+    <div class="ph">策略總覽 <small>點一列切換到該策略 · 回測含手續費與交易稅</small></div>
+    <div class="scroll"><table id="overview">
+      <thead><tr><th>策略</th><th>換股</th><th>最新選股</th><th>年化報酬</th><th>最大回撤</th><th>夏普值</th><th>勝率</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+  <div id="detail"></div>
+
+  <footer>
+    策略選股 · 資料與回測引擎:FinLab · 每個交易日晚上自動更新<br>
+    回測績效為歷史模擬,不代表未來報酬 · 僅供研究參考,不構成投資建議 · 台股漲跌色:紅漲綠跌
+  </footer>
+</div>
+
+<!--DATA-->
+<script>
+let DATA=null, cur=null, chart=null;
+const f=(n,d=2)=> n==null?"—":Number(n).toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
+const pct=(n,d=1)=> n==null?"—":(n*100).toFixed(d)+"%";
+const cls=v=> v>0?"up":(v<0?"down":"neu");
+const esc=s=> String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const yhref=c=> `https://tw.stock.yahoo.com/quote/${encodeURIComponent(c)}`;
+
+function overview(){
+  document.querySelector("#overview tbody").innerHTML=DATA.strategies.map(s=>{
+    if(s.error) return `<tr data-id="${s.id}"><td><b>${esc(s.name)}</b></td><td class="ind">${esc(s.rebalance)}</td><td colspan="5" class="err">本次執行失敗</td></tr>`;
+    const st=s.stats||{};
+    return `<tr data-id="${s.id}"><td><b>${esc(s.name)}</b></td><td class="ind">${esc(s.rebalance)}</td>
+      <td>${s.picks.length} 檔 <span class="ind">(${s.signalDate})</span></td>
+      <td class="${cls(st.cagr)}">${pct(st.cagr)}</td><td class="down">${pct(st.max_drawdown)}</td>
+      <td>${f(st.daily_sharpe,2)}</td><td>${pct(st.win_ratio,0)}</td></tr>`;
+  }).join("");
+  document.querySelectorAll("#overview tbody tr").forEach(tr=>tr.onclick=()=>show(tr.dataset.id,true));
+}
+
+function tabs(){
+  const el=document.getElementById("tabs");
+  el.innerHTML=DATA.strategies.map(s=>`<button class="tab" data-id="${s.id}">${esc(s.name)}</button>`).join("");
+  el.onclick=e=>{const b=e.target.closest(".tab"); if(b) show(b.dataset.id);};
+}
+
+function show(id,scroll){
+  cur=id;
+  try{history.replaceState(null,"","#"+id);}catch(e){}
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.id===id));
+  const s=DATA.strategies.find(x=>x.id===id); if(!s) return;
+  const st=s.stats||{};
+  const rules=`<ul class="rules">${s.rules.map(r=>`<li>${esc(r)}</li>`).join("")}</ul><div class="rebal">⟳ ${esc(s.rebalance)}</div>`;
+  if(s.error){
+    document.getElementById("detail").innerHTML=`<div class="panel"><div class="ph">${esc(s.name)}</div><div class="pb">${rules}<p class="err" style="margin-top:12px">本次執行失敗:${esc(s.error)}</p></div></div>`;
+    return;
+  }
+  const picks=s.picks.length?`<div class="scroll"><table>
+      <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th>收盤</th><th>漲跌%</th><th>${esc(s.metricLabel)}</th></tr></thead>
+      <tbody>${s.picks.map(p=>`<tr><td class="code"><a href="${yhref(p.code)}" target="_blank" rel="noopener">${esc(p.code)}</a></td>
+        <td>${esc(p.name)}</td><td class="ind">${esc(p.industry)}</td><td>${f(p.close,2)}</td>
+        <td><span class="chip ${cls(p.chg)}">${p.chg==null?"—":(p.chg>0?"+":"")+f(p.chg,2)+"%"}</span></td>
+        <td>${esc(p.metric??"—")}</td></tr>`).join("")}</tbody></table></div>`
+    :`<div class="empty">${esc(s.signalDate)} 沒有符合條件的股票(空手)</div>`;
+  document.getElementById("detail").innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><div class="k">年化報酬</div><div class="v ${cls(st.cagr)}">${pct(st.cagr)}</div></div>
+      <div class="kpi"><div class="k">最大回撤</div><div class="v down">${pct(st.max_drawdown)}</div></div>
+      <div class="kpi"><div class="k">夏普值(日)</div><div class="v">${f(st.daily_sharpe,2)}</div></div>
+      <div class="kpi"><div class="k">勝率</div><div class="v">${pct(st.win_ratio,0)}</div></div>
+      <div class="kpi"><div class="k">平均持股</div><div class="v">${f(st.avg_n_stock,1)}</div></div>
+    </div>
+    <div class="grid2">
+      <div class="panel"><div class="ph">權益曲線 <small>${esc(s.start)} ~ ${esc(s.end)} · 灰線為大盤報酬指數</small></div>
+        <div class="pb"><div class="chartbox"><canvas id="eq"></canvas></div></div></div>
+      <div class="panel"><div class="ph">選股條件</div><div class="pb">${rules}</div></div>
+    </div>
+    <div class="panel"><div class="ph">最新選股 <small>訊號日 ${esc(s.signalDate)} · 共 ${s.picks.length} 檔 · 等權重</small></div>${picks}</div>`;
+  drawChart(s);
+  if(scroll) document.getElementById("tabs").scrollIntoView({behavior:"smooth"});
+}
+
+function drawChart(s){
+  if(chart) chart.destroy();
+  if(typeof Chart==="undefined") return;
+  const up=getComputedStyle(document.documentElement).getPropertyValue("--up").trim();
+  const bmap=Object.fromEntries((s.bench||[]).map(p=>[p[0],p[1]]));
+  chart=new Chart(document.getElementById("eq"),{type:"line",
+    data:{labels:s.equity.map(p=>p[0]),datasets:[
+      {label:"策略",data:s.equity.map(p=>p[1]),borderColor:up,borderWidth:1.6,pointRadius:0,tension:.1},
+      {label:"大盤",data:s.equity.map(p=>bmap[p[0]]??null),borderColor:"#8b97ad",borderWidth:1.2,pointRadius:0,spanGaps:true,tension:.1}]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+      plugins:{legend:{labels:{color:"#8b97ad"}},tooltip:{backgroundColor:"#1b2231",callbacks:{label:c=>`${c.dataset.label} ${f(c.parsed.y,2)} 倍`}}},
+      scales:{x:{ticks:{color:"#8b97ad",maxTicksLimit:8},grid:{color:"#2a3346"}},
+              y:{ticks:{color:"#8b97ad"},grid:{color:"#2a3346"}}}}});
+}
+
+function boot(d){
+  DATA=d;
+  const upd=new Date(d.generatedAt).toLocaleString("zh-TW",{timeZone:"Asia/Taipei",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
+  document.getElementById("meta").innerHTML=`資料日期 <b>${d.dataDate}</b> · 更新於 ${upd} · ${d.strategies.length} 個策略`;
+  const age=(Date.now()-new Date(d.dataDate+"T00:00:00+08:00"))/864e5;
+  if(age>7){const el=document.getElementById("stale");el.style.display="block";
+    el.textContent=`⚠ FinLab 資料停在 ${d.dataDate}(${Math.floor(age)} 天前)。免費會員的台股資料只到 2023-12-31,要最新選股需 FinLab VIP。`;}
+  overview(); tabs();
+  const want=location.hash.slice(1);
+  show(DATA.strategies.some(s=>s.id===want)?want:DATA.strategies[0].id);
+}
+
+if(window.STRAT_DATA) boot(window.STRAT_DATA);
+else fetch("data.json").then(r=>r.json()).then(boot).catch(()=>{
+  document.getElementById("detail").innerHTML='<div class="empty">尚無資料:請先設定 FinLab 憑證(見 strategies/README.md),或在本機執行 python fetch_strategies.py</div>';
+});
+</script>
+</body>
+</html>
