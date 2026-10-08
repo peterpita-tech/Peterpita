@@ -1,0 +1,21 @@
+# 暫時用:測試觀測站即時重大訊息來源,確認後刪除
+name: mops-probe
+on:
+  push:
+    paths: [".github/workflows/mops-probe.yml"]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+          p() { echo; echo "===== $*"; curl -sS -m 40 -A "$UA" -o body -w "HTTP %{http_code} %{content_type}\n" "$@"; echo "--- size $(wc -c < body)"; head -c 2500 body; echo; }
+          p https://mops.twse.com.tw/mops/api/t05sr01_1
+          p "https://mops.twse.com.tw/mops/api/t05sr01_1?marketKind=all"
+          p -X POST -H "Content-Type: application/json" -d '{"marketKind":"all"}' https://mops.twse.com.tw/mops/api/t05sr01_1
+          p -X POST -H "Content-Type: application/json" -d '{"count":"0","marketKind":""}' https://mops.twse.com.tw/mops/api/t05sr01_1
+          p -X POST -d 'encodeURIComponent=1&step=1&firstin=1&TYPEK=all' https://mopsov.twse.com.tw/mops/web/ajax_t05sr01_1
+          p -X POST -d 'encodeURIComponent=1&step=0&firstin=1&off=1&TYPEK=all' https://mopsov.twse.com.tw/mops/web/ajax_t05sr01_1
+          tr -s ' \t\r\n' ' ' < body | sed 's/<tr/\n<tr/g' | head -40 | cut -c1-600
+          p https://mops.twse.com.tw/mops/
+          grep -o 'src="[^"]*\.js"' body | head
