@@ -8,8 +8,8 @@ on:
     - cron: "30 7 * * 1-5"
     # 美股收盤後:台灣隔日 06:30(只更新美股)
     - cron: "30 22 * * 1-5"
-    # 重大訊息:台灣每天 21:50(含假日;其他排程也會順便更新)
-    - cron: "50 13 * * *"
+    # 重大訊息:台灣每天 17:50 / 19:50 / 21:50 / 23:50(含假日;其他排程也會順便更新)
+    - cron: "50 9,11,13,15 * * *"
   workflow_dispatch:        # 可在 Actions 頁面手動執行
   push:
     paths:
@@ -49,7 +49,7 @@ jobs:
         run: |
           case "${{ github.event.schedule }}" in
             "30 22 * * 1-5") echo "us=true"  >> "$GITHUB_OUTPUT"; echo "tw=false" >> "$GITHUB_OUTPUT" ;;
-            "50 13 * * *")   echo "us=false" >> "$GITHUB_OUTPUT"; echo "tw=false" >> "$GITHUB_OUTPUT" ;;
+            "50 9,11,13,15 * * *") echo "us=false" >> "$GITHUB_OUTPUT"; echo "tw=false" >> "$GITHUB_OUTPUT" ;;
             "")              echo "us=true"  >> "$GITHUB_OUTPUT"; echo "tw=true"  >> "$GITHUB_OUTPUT" ;;
             *)               echo "us=false" >> "$GITHUB_OUTPUT"; echo "tw=true"  >> "$GITHUB_OUTPUT" ;;
           esac

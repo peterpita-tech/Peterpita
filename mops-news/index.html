@@ -128,7 +128,7 @@ function render() {
       <span class="sub2"><span class="tag t-${r.mkt}">${r.mkt}</span><span class="tag t-cat">${r.cat}</span>
         ${r.eventDate ? `<span>事實發生日 ${esc(r.eventDate)}</span>` : ""}</span>
     </summary>
-    <div class="body">${hl(r.desc || "(無說明)", terms)}</div>
+    <div class="body">${hl(r.desc || "(說明稍後補上)", terms)}</div>
     <div class="foot">${r.clause ? "符合條款:" + esc(r.clause) : ""}</div></details>`;
   }
   $("list").innerHTML = html || `<div class="empty">沒有符合條件的重大訊息</div>`;
