@@ -1,11 +1,13 @@
 """台股重大訊息 · 公開資訊觀測站 每日抓取
 
-資料來源(公開資訊觀測站「每日重大訊息」的官方開放資料):
-    上市 https://openapi.twse.com.tw/v1/opendata/t187ap04_L
-    上櫃 https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap04_O
+資料來源:
+  1. 觀測站「即時重大訊息」(當天,含說明):
+     https://mopsov.twse.com.tw/mops/web/ajax_t05sr01_1
+  2. 證交所 / 櫃買中心 OpenAPI(前一個發言日的完整清單,隔天清晨才更新,用來補漏):
+     上市 https://openapi.twse.com.tw/v1/opendata/t187ap04_L
+     上櫃 https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap04_O
 
-OpenAPI 只提供「當天」的重大訊息,所以每次執行都會和上一版 data.json 合併,
-累積保留最近 --days 天。
+兩邊都只給一天的資料,所以每次執行都會和上一版 data.json 合併,累積保留最近 --days 天。
 
 用法:
     pip install requests
@@ -18,9 +20,11 @@ OpenAPI 只提供「當天」的重大訊息,所以每次執行都會和上一�
 """
 import argparse
 import csv
+import html
 import json
 import re
 import sys
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -33,6 +37,10 @@ UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.3
       "Accept": "application/json, text/plain, */*"}
 SOURCES = {"上市": "https://openapi.twse.com.tw/v1/opendata/t187ap04_L",
            "上櫃": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap04_O"}
+REALTIME = "https://mopsov.twse.com.tw/mops/web/ajax_t05sr01_1"
+TYPEK = {"上市": "sii", "上櫃": "otc"}
+DETAIL_MAX = 400      # 每次最多補抓幾則說明(其餘留給下次或隔天的 OpenAPI)
+DETAIL_DELAY = 0.5    # 秒;避免觀測站判定查詢過於頻繁
 # 欄位名稱在兩個 OpenAPI 間略有不同(有時還帶空白),逐一嘗試
 FIELDS = {
     "date":   ("發言日期", "SpeakDate", "Date"),
@@ -92,6 +100,50 @@ def fetch(mkt):
     return rows
 
 
+def text(h):
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", h))).strip()
+
+
+def post_realtime(form):
+    r = requests.post(REALTIME, data=form, headers={"User-Agent": UA["User-Agent"]}, timeout=60)
+    r.raise_for_status()
+    r.encoding = "utf-8"
+    return r.text
+
+
+def fetch_realtime(mkt):
+    """觀測站「即時重大訊息」:當天到目前為止的清單(只有主旨,說明另外抓)。"""
+    page = post_realtime({"encodeURIComponent": 1, "step": 0, "firstin": 1, "off": 1, "TYPEK": TYPEK[mkt]})
+    if "fm_t05sr01_1" not in page:
+        raise RuntimeError("回應格式不符(可能被擋或改版)")
+    rows = []
+    for tr in re.findall(r"<tr class='(?:odd|even)'>(.*?)</tr>", page, re.S):
+        td = [text(x) for x in re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)]
+        form = dict(re.findall(r"fm_t05sr01_1\.(\w+)\.value='([^']*)'", tr))
+        if len(td) < 5 or not form.get("COMPANY_ID"):
+            continue
+        r = {"date": roc_date(td[2]), "time": hms(td[3]), "code": td[0], "name": td[1],
+             "subject": td[4], "clause": "", "eventDate": "", "desc": "", "mkt": mkt,
+             "_form": {"TYPEK": "all", "step": 1, "firstin": "true", **form}}
+        if r["code"] and r["date"]:
+            rows.append(r)
+    print(f"[即時 {mkt}] {len(rows)} 則")
+    return rows
+
+
+def fetch_detail(r):
+    """補上即時訊息的符合條款、事實發生日與說明。"""
+    page = post_realtime(r["_form"])
+    m = re.search(r"<pre[^>]*>(.*?)</pre>", page, re.S)
+    if not m:
+        raise RuntimeError("找不到說明")
+    r["desc"] = html.unescape(re.sub(r"<[^>]+>", "", m.group(1))).replace("\r\n", "\n").strip()
+    if c := re.search(r"符合條款.*?第</th>\s*<td[^>]*>(.*?)</td>", page, re.S):
+        r["clause"] = f"第{text(c.group(1))}款"
+    if d := re.search(r"事實發生日</th>\s*<td[^>]*>(.*?)</td>", page, re.S):
+        r["eventDate"] = roc_date(text(d.group(1))) or text(d.group(1))
+
+
 def load_prev(src):
     if not src:
         return []
@@ -111,7 +163,8 @@ def load_prev(src):
 
 
 def key(r):
-    return (r["mkt"], r["code"], r["date"], r["time"], r["subject"])
+    # 主旨在即時頁與 OpenAPI 的斷行寫法不同,不能拿來比對
+    return (r["code"], r["date"], r["time"])
 
 
 def main():
@@ -121,24 +174,57 @@ def main():
     ap.add_argument("--days", type=int, default=90, help="保留最近幾天(預設 90)")
     a = ap.parse_args()
 
-    new, failed = [], []
+    merged = {key(r): r for r in load_prev(a.prev)}
+    before = set(merged)
+    failed, ok = [], 0
+
+    # 1) 即時:當天的新訊息先放進來,沒有說明的再逐則補抓
+    for mkt in TYPEK:
+        try:
+            live = fetch_realtime(mkt)
+            ok += 1
+        except Exception as e:  # noqa: BLE001
+            failed.append(f"即時{mkt}")
+            print(f"[即時 {mkt}] 失敗: {e}", file=sys.stderr)
+            continue
+        for r in live:
+            old = merged.get(key(r))
+            if old and old.get("desc"):
+                continue
+            merged[key(r)] = r
+    todo = [r for r in merged.values() if "_form" in r][:DETAIL_MAX]
+    got = 0
+    for r in todo:
+        try:
+            fetch_detail(r)
+            got += 1
+        except Exception as e:  # noqa: BLE001
+            print(f"[說明] {r['code']} {r['time']} 失敗: {e}", file=sys.stderr)
+        time.sleep(DETAIL_DELAY)
+    if todo:
+        print(f"[說明] 補抓 {got}/{len(todo)} 則")
+
+    # 2) OpenAPI:前一個發言日的完整版,蓋過即時資料並補上漏抓的
     for mkt in SOURCES:
         try:
-            new += fetch(mkt)
+            merged.update({key(r): r for r in fetch(mkt)})
+            ok += 1
         except Exception as e:  # noqa: BLE001
             failed.append(mkt)
             print(f"[{mkt}] 失敗: {e}", file=sys.stderr)
-    if not new:
-        sys.exit("上市、上櫃都沒有抓到任何重大訊息")
+    if not ok:
+        sys.exit("所有資料來源都失敗")
 
-    merged = {key(r): r for r in load_prev(a.prev)}
-    added = sum(1 for r in new if key(r) not in merged)
-    merged.update({key(r): r for r in new})
+    for r in merged.values():
+        r.pop("_form", None)
+    added = len(set(merged) - before)
     cutoff = (datetime.now(TPE).date() - timedelta(days=a.days)).isoformat()
     rows = sorted((r for r in merged.values() if r["date"] >= cutoff),
                   key=lambda r: (r["date"], r["time"], r["code"]), reverse=True)
 
-    latest = max(r["date"] for r in new)
+    if not rows:
+        sys.exit("沒有任何重大訊息")
+    latest = rows[0]["date"]
     data = {
         "generatedAt": int(datetime.now(timezone.utc).timestamp() * 1000),
         "latest": latest,
