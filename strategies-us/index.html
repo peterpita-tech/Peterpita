@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>策略選股 · 台股</title>
+<title>策略選股 · 美股</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root{
     --bg:#0b0e14; --panel:#141925; --panel2:#1b2231; --line:#2a3346;
     --txt:#e6ebf2; --muted:#8b97ad; --dim:#5f6b80;
-    --up:#ff4d4f; --down:#13c267; --upbg:rgba(255,77,79,.14); --downbg:rgba(19,194,103,.14);
+    --up:#13c267; --down:#ff4d4f; --upbg:rgba(19,194,103,.14); --downbg:rgba(255,77,79,.14);   /* 美股慣例:漲綠跌紅 */
     --accent:#4da3ff; --amber:#ffb020; --purple:#a779ff;
     --shadow:0 8px 28px rgba(0,0,0,.35);
   }
@@ -70,18 +70,18 @@
 <div class="wrap">
   <div class="top">
     <div>
-      <h1><span class="sub">策略</span>選股 · 台股</h1>
+      <h1><span class="sub">策略</span>選股 · 美股</h1>
       <div class="meta" id="meta">載入中 …</div>
     </div>
     <div class="links">
-      <a class="switch" href="https://peterpita-tech.github.io/Peterpita/tw/">🇹🇼 籌碼掃描</a>
-      <a class="switch" href="https://peterpita-tech.github.io/Peterpita/strategies-us/">🇺🇸 美股策略</a>
+      <a class="switch" href="https://peterpita-tech.github.io/Peterpita/">🇺🇸 美股籌碼掃描</a>
+      <a class="switch" href="https://peterpita-tech.github.io/Peterpita/strategies/">🇹🇼 台股策略</a>
     </div>
   </div>
   <div class="stale" id="stale"></div>
 
   <div class="panel">
-    <div class="ph">策略總覽 <small>點一列切換到該策略 · 回測含手續費與交易稅</small></div>
+    <div class="ph">策略總覽 <small>點一列切換到該策略 · 回測含交易成本</small></div>
     <div class="scroll"><table id="overview">
       <thead><tr><th>策略</th><th>換股</th><th>最新選股</th><th>年化報酬</th><th>最大回撤</th><th>夏普值</th><th>勝率</th></tr></thead>
       <tbody></tbody>
@@ -92,8 +92,8 @@
   <div id="detail"></div>
 
   <footer>
-    策略選股 · 資料:Yahoo Finance、公開資訊觀測站 · 回測:自建引擎(隔日開盤成交、含手續費與交易稅)· 每個交易日晚上自動更新<br>
-    回測績效為歷史模擬,不代表未來報酬 · 僅供研究參考,不構成投資建議 · 台股漲跌色:紅漲綠跌
+    策略選股 · 美股 · 資料:NASDAQ 代號表、Yahoo Finance(市值 ≥ 3 億美元)· 回測:自建引擎(隔日開盤成交、成本 0.05%)· 大盤基準 SPY · 每個交易日美股收盤後更新<br>
+    回測績效為歷史模擬,不代表未來報酬 · 只含目前上市公司(存活者偏差)· 僅供研究參考,不構成投資建議 · 美股漲跌色:綠漲紅跌
   </footer>
 </div>
 
@@ -104,7 +104,7 @@ const f=(n,d=2)=> n==null?"—":Number(n).toLocaleString("en-US",{minimumFractio
 const pct=(n,d=1)=> n==null?"—":(n*100).toFixed(d)+"%";
 const cls=v=> v>0?"up":(v<0?"down":"neu");
 const esc=s=> String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const yhref=c=> `https://tw.stock.yahoo.com/quote/${encodeURIComponent(c)}`;
+const yhref=c=> `https://finance.yahoo.com/quote/${encodeURIComponent(c)}`;
 
 function overview(){
   document.querySelector("#overview tbody").innerHTML=DATA.strategies.map(s=>{
@@ -155,9 +155,21 @@ function show(id,scroll){
         <div class="pb"><div class="chartbox"><canvas id="eq"></canvas></div></div></div>
       <div class="panel"><div class="ph">選股條件</div><div class="pb">${rules}</div></div>
     </div>
-    <div class="panel"><div class="ph">最新選股 <small>訊號日 ${esc(s.signalDate)} · 共 ${s.picks.length} 檔 · 等權重</small></div>${picks}</div>`;
+    <div class="panel"><div class="ph">最新選股 <small>訊號日 ${esc(s.signalDate)} · 共 ${s.picks.length} 檔 · 等權重</small></div>${picks}</div>
+    ${s.watch?watchTable(s.watch):""}`;
   drawChart(s);
   if(scroll) document.getElementById("tabs").scrollIntoView({behavior:"smooth"});
+}
+
+function watchTable(w){
+  const body=w.picks.length?`<div class="scroll"><table>
+      <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th>收盤</th><th>漲跌%</th><th>${esc(w.metricLabel)}</th><th>${esc(w.extraLabel)}</th></tr></thead>
+      <tbody>${w.picks.map(p=>`<tr><td class="code"><a href="${yhref(p.code)}" target="_blank" rel="noopener">${esc(p.code)}</a></td>
+        <td>${esc(p.name)}</td><td class="ind">${esc(p.industry)}</td><td>${f(p.close,2)}</td>
+        <td><span class="chip ${cls(p.chg)}">${p.chg==null?"—":(p.chg>0?"+":"")+f(p.chg,2)+"%"}</span></td>
+        <td>${esc(p.metric??"—")}</td><td>${esc(p.extra??"—")}</td></tr>`).join("")}</tbody></table></div>`
+    :`<div class="empty">目前沒有符合條件的股票</div>`;
+  return `<div class="panel"><div class="ph">${esc(w.title)} <small>共 ${w.picks.length} 檔 · 突破樞紐點且放量才進場</small></div>${body}</div>`;
 }
 
 function drawChart(s){

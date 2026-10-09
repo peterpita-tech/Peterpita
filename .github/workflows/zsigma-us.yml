@@ -104,6 +104,13 @@ jobs:
           key: strat-out-${{ github.run_id }}
           restore-keys: strat-out-
 
+      - name: 取得美股策略選股頁面
+        uses: actions/cache/restore@v4
+        with:
+          path: strategies-us/策略選股_美股.html
+          key: strat-us-out-${{ github.run_id }}
+          restore-keys: strat-us-out-
+
       # 沒更新(或失敗)的市場沿用網站上目前的版本
       - name: 準備網站檔案
         env:
@@ -111,8 +118,9 @@ jobs:
           TW: ${{ steps.tw.outcome }}
           NEWS: ${{ steps.news.outcome }}
           STRAT: ${{ hashFiles('strategies/策略選股.html') != '' && 'success' || 'missing' }}
+          STRAT_US: ${{ hashFiles('strategies-us/策略選股_美股.html') != '' && 'success' || 'missing' }}
         run: |
-          mkdir -p _site/tw _site/news _site/strategies
+          mkdir -p _site/tw _site/news _site/strategies _site/strategies-us
           touch _site/.nojekyll
           if [ "$US" = success ]; then
             cp "zsigma-us/籌碼結構掃描_美股.html" _site/index.html
@@ -137,6 +145,11 @@ jobs:
             cp "strategies/策略選股.html" _site/strategies/index.html
           else
             curl -fsSL "$SITE/strategies/" -o _site/strategies/index.html || cp strategies/index.html _site/strategies/index.html
+          fi
+          if [ "$STRAT_US" = success ]; then
+            cp "strategies-us/策略選股_美股.html" _site/strategies-us/index.html
+          else
+            curl -fsSL "$SITE/strategies-us/" -o _site/strategies-us/index.html || cp strategies-us/index.html _site/strategies-us/index.html
           fi
           if [ "$US" != success ] && [ "$TW" != success ] && [ "$NEWS" != success ] && [ "$STRAT" != success ]; then
             echo "::error::這次沒有任何市場更新成功"; exit 1

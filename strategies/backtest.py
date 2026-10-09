@@ -24,9 +24,29 @@ def hold_until(entry, exit_):
     return pd.DataFrame(out, entry.index, entry.columns)
 
 
+def hold_until_stop(entry, exit_, price, stop):
+    """同 hold_until,另外收盤跌破進場價 ×(1 − stop)也出場(進場價 = 進場當天收盤)。"""
+    e = entry.fillna(False).to_numpy(bool)
+    x = exit_.reindex(index=entry.index, columns=entry.columns).fillna(False).to_numpy(bool)
+    p = price.reindex(index=entry.index, columns=entry.columns).to_numpy(float)
+    out = np.zeros_like(e)
+    state = np.zeros(e.shape[1], bool)
+    cost = np.full(e.shape[1], np.nan)
+    for t in range(len(e)):
+        stopped = state & (p[t] <= cost * (1 - stop))
+        leave = state & (x[t] | stopped)
+        enter = ~state & e[t] & ~x[t]
+        state = (state & ~leave) | enter
+        cost = np.where(enter, p[t], cost)
+        out[t] = state
+    return pd.DataFrame(out, entry.index, entry.columns)
+
+
 def rebalance_dates(index, rule):
-    """'W' / 'M' / 'Q' → 該週 / 月 / 季最後一個交易日;日期序列 → 當天或之後第一個交易日。"""
+    """'D' → 每個交易日;'W' / 'M' / 'Q' → 該週 / 月 / 季最後一個交易日;日期序列 → 當天或之後第一個交易日。"""
     s = index.to_series()
+    if rule == "D":
+        return pd.DatetimeIndex(index)
     if isinstance(rule, str):
         freq = {"W": "W", "M": "M", "Q": "Q"}[rule]
         return pd.DatetimeIndex(s.groupby(index.to_period(freq)).last().values)
