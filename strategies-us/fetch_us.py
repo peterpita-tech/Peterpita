@@ -254,6 +254,15 @@ def run_one(D, spec):
     eq, stats = bt.run(position, D.open, D.adj, rule, start=START,
                        fee=kw.get("fee", FEE), tax=kw.get("tax", TAX), stop_loss=kw.get("stop_loss"))
     bench = D.bench.reindex(eq.index).ffill().dropna() if D.bench is not None else pd.Series(dtype=float)
+    yearly = eq.resample("YE").last().pct_change().fillna(eq.resample("YE").last().iloc[:1] - 1)
+    print(f"      交易 {stats['trades']} 筆、勝率 {stats['win_ratio']}、平均持股 {stats['avg_n_stock']:.1f};"
+          f"每年報酬 {', '.join(f'{d.year}:{v:+.0%}' for d, v in yearly.items())}", flush=True)
+    if spec["id"] == "vcp":                                   # 臨時診斷:同訊號改週換股、不同成本
+        for r2, fee2 in (("W", FEE), ("D", 0.0)):
+            eq2, st2 = bt.run(position, D.open, D.adj, r2, start=START, fee=fee2, tax=0)
+            print(f"      [診斷] rule={r2} fee={fee2}: CAGR {st2['cagr']:+.1%} MDD {st2['max_drawdown']:.1%} 交易 {st2['trades']}", flush=True)
+        n_hold = position.loc[START:].sum(axis=1)
+        print(f"      [診斷] 每日持股數 平均 {n_hold.mean():.1f} 最大 {n_hold.max()} 為 0 的天數 {(n_hold == 0).mean():.0%}", flush=True)
     when, label, picks = picks_of(D, position, metric)
     out = {
         "id": spec["id"], "name": spec["name"], "rebalance": spec["rebalance"], "rules": spec["rules"],
