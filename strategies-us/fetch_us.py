@@ -143,7 +143,7 @@ def vcp_breakout(D):
     held = held & largest(D.rs.where(held), 20)                                    # 最多 20 檔,取 RS 最強
     # 觀察名單:已有 VCP、距樞紐點 5% 內、還沒突破
     watch = tt & D.liquid & setup & (D.adj >= pivot * 0.95) & (D.adj <= pivot)
-    return held, "D", {}, ("RS", D.rs, "{:.0f}", False), {
+    return held, "D", {"slots": 20}, ("RS", D.rs, "{:.0f}", False), {
         "frame": watch, "metric": ("距樞紐點", (D.adj / pivot - 1) * 100, "{:+.1f}%", False),
         "extra": ("最後收縮幅度", d3 * 100, "{:.1f}%")}
 
@@ -186,7 +186,7 @@ def risk_adjusted(D):
 
 
 STRATEGIES = [
-    dict(id="vcp", fn=vcp_breakout, name="VCP 突破", rebalance="每日檢查;跌破 50 日均線或虧損 8% 出場,最多 20 檔",
+    dict(id="vcp", fn=vcp_breakout, name="VCP 突破", rebalance="每日檢查;跌破 50 日均線或虧損 8% 出場;每檔 5% 資金,最多 20 檔",
          rules=["符合 Minervini 趨勢模板 8 條件(含 RS ≥ 70)",
                 "近 60 日分 3 段,高低幅度依序縮小,最後一段 ≤ 10%(第一段 ≤ 35%)",
                 "最後 10 日均量 < 50 日均量 × 0.75(量縮)",
@@ -252,17 +252,12 @@ def run_one(D, spec):
     position, rule, kw, metric, watch = spec["fn"](D)
     position = position.reindex(index=D.adj.index, columns=D.adj.columns).fillna(False).astype(bool)
     eq, stats = bt.run(position, D.open, D.adj, rule, start=START,
-                       fee=kw.get("fee", FEE), tax=kw.get("tax", TAX), stop_loss=kw.get("stop_loss"))
+                       fee=kw.get("fee", FEE), tax=kw.get("tax", TAX), stop_loss=kw.get("stop_loss"),
+                       slots=kw.get("slots"))
     bench = D.bench.reindex(eq.index).ffill().dropna() if D.bench is not None else pd.Series(dtype=float)
     yearly = eq.resample("YE").last().pct_change().fillna(eq.resample("YE").last().iloc[:1] - 1)
     print(f"      交易 {stats['trades']} 筆、勝率 {stats['win_ratio']}、平均持股 {stats['avg_n_stock']:.1f};"
           f"每年報酬 {', '.join(f'{d.year}:{v:+.0%}' for d, v in yearly.items())}", flush=True)
-    if spec["id"] == "vcp":                                   # 臨時診斷:同訊號改週換股、不同成本
-        for r2, fee2 in (("W", FEE), ("D", 0.0)):
-            eq2, st2 = bt.run(position, D.open, D.adj, r2, start=START, fee=fee2, tax=0)
-            print(f"      [診斷] rule={r2} fee={fee2}: CAGR {st2['cagr']:+.1%} MDD {st2['max_drawdown']:.1%} 交易 {st2['trades']}", flush=True)
-        n_hold = position.loc[START:].sum(axis=1)
-        print(f"      [診斷] 每日持股數 平均 {n_hold.mean():.1f} 最大 {n_hold.max()} 為 0 的天數 {(n_hold == 0).mean():.0%}", flush=True)
     when, label, picks = picks_of(D, position, metric)
     out = {
         "id": spec["id"], "name": spec["name"], "rebalance": spec["rebalance"], "rules": spec["rules"],

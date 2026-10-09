@@ -55,7 +55,8 @@ def rebalance_dates(index, rule):
 
 
 def run(signal, adj_open, adj_close, rebalance, start="2019-01-01",
-        fee=0.001425, tax=0.003, stop_loss=None):
+        fee=0.001425, tax=0.003, stop_loss=None, slots=None):
+    """slots:固定格數(每檔最多 1/slots 資金,其餘放現金);None = 資金平均分給所有選到的股票。"""
     idx = adj_close.index[adj_close.index >= pd.Timestamp(start)]
     cols = signal.columns.intersection(adj_close.columns)
     sig = signal.reindex(index=idx, columns=cols).fillna(False).to_numpy(bool)
@@ -83,7 +84,7 @@ def run(signal, adj_open, adj_close, rebalance, start="2019-01-01",
 
         # 換股成本:賣掉不再持有的、把留下的與新買的調成等權重
         new = set(sel.tolist())
-        target = V / len(sel) if len(sel) else 0.0
+        target = V / max(len(sel), slots or 0) if len(sel) else 0.0
         sells = sum(v for c, v in prev.items() if c not in new)
         buys = 0.0
         for c in new:
@@ -102,7 +103,8 @@ def run(signal, adj_open, adj_close, rebalance, start="2019-01-01",
             prev = {}
             continue
 
-        a = V / len(sel)                                   # 每檔投入金額
+        a = V / max(len(sel), slots or 0)                  # 每檔投入金額
+        cash = V - a * len(sel)                            # 固定格數時沒用到的資金
         entry = O[e, sel]
         rel = C[e:nxt, sel] / entry                        # 期間每日收盤 ÷ 進場價
         stopped = np.zeros(len(sel), bool)
@@ -112,7 +114,7 @@ def run(signal, adj_open, adj_close, rebalance, start="2019-01-01",
                 frozen = rel[np.argmax(hit, axis=0), np.arange(len(sel))]
                 rel = np.where(hit, frozen * (1 - fee - tax), rel)   # 停損當天收盤賣出(扣稅費)後變現金
                 stopped = hit[-1]
-        equity[e:nxt] = a * np.nansum(np.where(np.isfinite(rel), rel, 1.0), axis=1)
+        equity[e:nxt] = cash + a * np.nansum(np.where(np.isfinite(rel), rel, 1.0), axis=1)
         held[e:nxt] = len(sel)
 
         if nxt < len(idx):                                 # 下一期第一天開盤出場
@@ -121,7 +123,7 @@ def run(signal, adj_open, adj_close, rebalance, start="2019-01-01",
         else:
             ex = rel[-1]
         ex = np.where(np.isfinite(ex), ex, 1.0)
-        V = a * float(ex.sum())
+        V = cash + a * float(ex.sum())
         prev = {}
         for c, m, s in zip(sel, ex, stopped):
             open_trade[c] = open_trade.get(c, 1.0) * m
