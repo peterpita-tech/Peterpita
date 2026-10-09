@@ -25,6 +25,8 @@ sys.path.insert(0, str(HERE.parent / "zsigma-us"))
 import backtest as bt  # noqa: E402
 from fetch_zsigma_us import get_universe  # noqa: E402
 
+import sec_data  # noqa: E402
+
 START = "2019-01-01"            # 回測起點
 MIN_MCAP = 3e8                  # 只看目前市值 ≥ 3 億美元的公司(控制資料量)
 FEE, TAX = 0.0005, 0.0          # 美股:無交易稅;手續費 + 滑價估 0.05%
@@ -93,6 +95,22 @@ class Data:
         # IBD 式相對強度:近 3/6/9/12 月報酬加權,換算成全市場百分位(0~99)
         raw = 0.4 * a.pct_change(63) + 0.2 * a.pct_change(126) + 0.2 * a.pct_change(189) + 0.2 * a.pct_change(252)
         self.rs = (raw.where(self.liquid).rank(axis=1, pct=True) * 99).round()
+        # 財報(SEC EDGAR);沒設定 SEC_USER_AGENT 或抓失敗時退回純價格版本
+        self.fund = None
+        try:
+            fund = sec_data.fundamentals(2018)
+            self.rev_q = fund["rev_q"].reindex(columns=cols)
+            self.fund = {k: daily(v.reindex(columns=cols), idx) for k, v in fund.items()}
+            self.roe, self.rev_yoy = self.fund["roe"], self.fund["rev_yoy"]
+            self.op_growth, self.eps_ttm = self.fund["op_growth"], self.fund["eps_ttm"]
+        except Exception as e:  # noqa: BLE001
+            print(f"[sec] 財報略過:{e}", flush=True)
+
+
+def daily(frame, index):
+    """公告日索引的資料對齊到交易日,沿用到下一次公告。"""
+    full = frame.reindex(frame.index.union(index)).sort_index().ffill()
+    return full.reindex(index)
 
 
 def rsi(close, n):
@@ -158,6 +176,8 @@ def rsi3(D):
     rsi20, rsi60, rsi120 = rsi(D.adj, 20), rsi(D.adj, 60), rsi(D.adj, 120)
     buy = ((rsi120 > 55) & (rsi60 < 75) & (rsi20.pct_change(3) > 0.02)
            & ((rsi20 > 75).rolling(3).sum() == 3) & D.liquid)
+    if D.fund:
+        buy = buy & (D.roe > 0)                                   # ROE(近四季)> 0
     sell = buy.shift(60).fillna(False).astype(bool) | (D.close < D.close.rolling(60).mean())
     return bt.hold_until(buy, sell), "W", {}, ("RSI20", rsi20, "{:.1f}", False), None
 
@@ -182,7 +202,22 @@ def risk_adjusted(D):
     ret6m, mom_3m = D.adj.pct_change(120), D.adj.pct_change(60)
     risk_adj = ret6m / ret.rolling(120).std()
     pool = D.liquid & (mom_3m > 0) & (ret6m > 0)
+    if D.fund:
+        pool = pool & (D.roe > 5) & (D.rev_yoy > 0)              # ROE > 5%、單季營收年增 > 0
     return largest(risk_adj.where(pool), 15), "Q", {}, ("報酬/波動", risk_adj, "{:.2f}", False), None
+
+
+def peg(D):
+    """本益成長比:營收動能向上中,PEG(本益比 ÷ 營業利益年增率)最低 10 檔。"""
+    if not D.fund:
+        raise RuntimeError("需要 SEC 財報(SEC_USER_AGENT)")
+    pe = D.close / D.eps_ttm.where(D.eps_ttm > 0)
+    peg_ = pe / D.op_growth
+    r = D.rev_q
+    cond_q = (r / r.rolling(4).mean() > 1.1) & (r / r.shift() > 0.9)   # 季營收版:最新一季 ÷ 近四季均值、÷ 上一季
+    cond = daily(cond_q.astype(float), D.adj.index) > 0
+    result = peg_.where(cond & (peg_ > 0) & D.liquid)
+    return result.rank(axis=1, method="first") <= 10, "M", {"stop_loss": 0.1}, ("PEG", peg_, "{:.2f}", True), None
 
 
 STRATEGIES = [
@@ -198,12 +233,16 @@ STRATEGIES = [
                 "相對強度(RS)≥ 70,取 RS 最高 20 檔"]),
     dict(id="rsi3", fn=rsi3, name="三頻率 RSI", rebalance="每週檢查,持有 60 天或跌破季線出場",
          rules=["RSI120 > 55、RSI60 < 75", "RSI20 三日漲幅 > 2%、RSI20 > 75 連續 3 天",
-                "台股版的 ROE > 0 條件:美股暫無免費財報,先拿掉"]),
+                "ROE(近四季淨利 ÷ 權益)> 0(SEC 財報)"]),
     dict(id="lowvol", fn=low_vol, name="低波動 30", rebalance="每月換股",
          rules=["日均成交額 > 500 萬美元", "60 日報酬波動率最低的 30 檔"]),
     dict(id="riskadj", fn=risk_adjusted, name="風險調整報酬 前 15", rebalance="每季換股",
-         rules=["日均成交額 > 500 萬美元", "3 個月與 6 個月報酬皆為正", "6 個月報酬 ÷ 120 日波動率 最高的 15 檔",
-                "台股版的 ROE、營收條件:美股暫無免費財報,先拿掉"]),
+         rules=["日均成交額 > 500 萬美元", "ROE > 5%、單季營收年增 > 0(SEC 財報)", "3 個月與 6 個月報酬皆為正",
+                "6 個月報酬 ÷ 120 日波動率 最高的 15 檔"]),
+    dict(id="peg", fn=peg, name="本益成長比 PEG", rebalance="每月換股,停損 10%",
+         rules=["最新一季營收 ÷ 近四季均值 > 1.1(台股版用月營收 3 月 ÷ 12 月均值)", "最新一季營收 ÷ 上一季 > 0.9",
+                "PEG = 本益比(收盤 ÷ 近四季 EPS)÷ 單季營業利益年增率,取最低 10 檔",
+                "日均成交額 > 500 萬美元"]),
     dict(id="highvol", fn=high_vol, name="高波動 30(對照組)", rebalance="每月換股",
          rules=["日均成交額 > 500 萬美元", "60 日報酬波動率最高的 30 檔", "用來對照低波動異象,非建議策略"]),
 ]

@@ -35,10 +35,26 @@ jobs:
 
       - run: pip install -r strategies-us/requirements.txt
 
+      # SEC 歷史財報抓過就不會變,快取起來
+      - uses: actions/cache/restore@v4
+        with:
+          path: strategies-us/.cache
+          key: sec-cache-${{ github.run_id }}
+          restore-keys: sec-cache-
+
       - name: 抓資料、回測、取最新選股
         timeout-minutes: 75
         working-directory: strategies-us
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}     # SEC 規定要附聯絡 email;沒設定就只跑價格類策略
         run: python fetch_us.py
+
+      - name: 保存 SEC 財報快取
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: strategies-us/.cache
+          key: sec-cache-${{ github.run_id }}
 
       - name: 保存策略頁面
         uses: actions/cache/save@v4
