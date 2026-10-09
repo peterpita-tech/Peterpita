@@ -10,7 +10,7 @@ on:
     - cron: "30 22 * * 1-5"
     # 重大訊息:台灣每天 17:50 / 19:50 / 21:50 / 23:50(含假日;其他排程也會順便更新)
     - cron: "50 9,11,13,15 * * *"
-    # 策略選股(FinLab):台灣週一~週五 20:40,等 FinLab 盤後資料更新
+    # 策略選股:台灣週一~週五 20:40(Yahoo 收盤價、觀測站月營收 / 財報都已更新)
     - cron: "40 12 * * 1-5"
   workflow_dispatch:        # 可在 Actions 頁面手動執行
   push:
@@ -51,8 +51,6 @@ jobs:
       # 排程只更新對應市場;手動執行 / push 兩個都更新
       - name: 決定要更新哪個市場
         id: plan
-        env:
-          HAS_FINLAB: ${{ secrets.FINLAB_REFRESH_TOKEN != '' && secrets.FINLAB_SESSION_ID != '' && secrets.FINLAB_API_KEY != '' }}
         run: |
           strat=false
           case "${{ github.event.schedule }}" in
@@ -62,10 +60,6 @@ jobs:
             "")              echo "us=true"  >> "$GITHUB_OUTPUT"; echo "tw=true"  >> "$GITHUB_OUTPUT"; strat=true ;;
             *)               echo "us=false" >> "$GITHUB_OUTPUT"; echo "tw=true"  >> "$GITHUB_OUTPUT" ;;
           esac
-          # 策略選股需要 FinLab 憑證(repo secrets);沒設定就跳過,沿用網站上的舊版
-          if [ "$strat" = true ] && [ "$HAS_FINLAB" != true ]; then
-            echo "::notice::未設定 FinLab secrets,略過策略選股"; strat=false
-          fi
           echo "strat=$strat" >> "$GITHUB_OUTPUT"
 
       - name: 安裝套件
@@ -100,16 +94,20 @@ jobs:
         working-directory: mops-news
         run: python fetch_mops_news.py --prev "$SITE/news/data.json"
 
-      - name: 策略選股:FinLab 回測與最新選股
+      # 觀測站歷史月營收 / 財報抓過就不會變,快取起來(第一次約 20 分鐘,之後幾分鐘)
+      - uses: actions/cache@v4
+        if: steps.plan.outputs.strat == 'true'
+        with:
+          path: strategies/.cache
+          key: strat-cache-${{ github.run_id }}
+          restore-keys: strat-cache-
+
+      - name: 策略選股:免費資料回測與最新選股
         id: strat
         if: steps.plan.outputs.strat == 'true'
         continue-on-error: true
-        timeout-minutes: 40
+        timeout-minutes: 45
         working-directory: strategies
-        env:
-          FINLAB_REFRESH_TOKEN: ${{ secrets.FINLAB_REFRESH_TOKEN }}
-          FINLAB_SESSION_ID: ${{ secrets.FINLAB_SESSION_ID }}
-          FINLAB_API_KEY: ${{ secrets.FINLAB_API_KEY }}
         run: |
           pip install -r requirements.txt
           python fetch_strategies.py

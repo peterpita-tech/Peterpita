@@ -92,7 +92,7 @@
   <div id="detail"></div>
 
   <footer>
-    策略選股 · 資料與回測引擎:FinLab · 每個交易日晚上自動更新<br>
+    策略選股 · 資料:Yahoo Finance、公開資訊觀測站 · 回測:自建引擎(隔日開盤成交、含手續費與交易稅)· 每個交易日晚上自動更新<br>
     回測績效為歷史模擬,不代表未來報酬 · 僅供研究參考,不構成投資建議 · 台股漲跌色:紅漲綠跌
   </footer>
 </div>
@@ -181,7 +181,7 @@ function boot(d){
   document.getElementById("meta").innerHTML=`資料日期 <b>${d.dataDate}</b> · 更新於 ${upd} · ${d.strategies.length} 個策略`;
   const age=(Date.now()-new Date(d.dataDate+"T00:00:00+08:00"))/864e5;
   if(age>7){const el=document.getElementById("stale");el.style.display="block";
-    el.textContent=`⚠ FinLab 資料停在 ${d.dataDate}(${Math.floor(age)} 天前)。免費會員的台股資料只到 2023-12-31,要最新選股需 FinLab VIP。`;}
+    el.textContent=`⚠ 資料停在 ${d.dataDate}(${Math.floor(age)} 天前),自動更新可能失敗了。`;}
   overview(); tabs();
   const want=location.hash.slice(1);
   show(DATA.strategies.some(s=>s.id===want)?want:DATA.strategies[0].id);
@@ -189,7 +189,7 @@ function boot(d){
 
 if(window.STRAT_DATA) boot(window.STRAT_DATA);
 else fetch("data.json").then(r=>r.json()).then(boot).catch(()=>{
-  document.getElementById("detail").innerHTML='<div class="empty">尚無資料:請先設定 FinLab 憑證(見 strategies/README.md),或在本機執行 python fetch_strategies.py</div>';
+  document.getElementById("detail").innerHTML='<div class="empty">尚無資料:請先執行 python fetch_strategies.py</div>';
 });
 </script>
 </body>

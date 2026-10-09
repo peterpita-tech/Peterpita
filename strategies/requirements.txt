@@ -1,2 +1,5 @@
-finlab>=2.2
-TA-Lib>=0.6
+yfinance>=0.2.50
+pandas>=2.0
+numpy>=1.24
+requests>=2.28
+lxml>=5.0
