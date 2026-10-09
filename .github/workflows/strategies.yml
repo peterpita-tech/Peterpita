@@ -1,0 +1,73 @@
+name: 策略選股(免費資料回測)
+
+# 獨立於網站發布流程:第一次要從觀測站抓 8 年歷史,可能跑一兩個小時,不能擋住盤中更新。
+# 算完把頁面存進 cache,再觸發網站發布流程(只發布、不重抓其他市場)。
+on:
+  schedule:
+    # 台灣週一~週五 20:40(Yahoo 收盤價、觀測站月營收 / 財報都已更新)
+    - cron: "40 12 * * 1-5"
+  workflow_dispatch:
+  push:
+    paths:
+      - "strategies/**"
+      - ".github/workflows/strategies.yml"
+
+permissions:
+  contents: read
+  actions: write          # 觸發網站發布流程
+
+concurrency:
+  group: strategies
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: strategies/requirements.txt
+
+      - run: pip install -r strategies/requirements.txt
+
+      # 觀測站歷史月營收 / 財報抓過就不會變;即使中途逾時,已抓的部分也會存下來
+      - uses: actions/cache/restore@v4
+        with:
+          path: strategies/.cache
+          key: strat-cache-${{ github.run_id }}
+          restore-keys: strat-cache-
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: zsigma-tw/.universe_cache.json
+          key: tw-universe-${{ github.run_id }}
+          restore-keys: tw-universe-
+
+      - name: 抓資料、回測、取最新選股
+        id: run
+        timeout-minutes: 160
+        working-directory: strategies
+        run: python fetch_strategies.py
+
+      - name: 保存觀測站資料快取
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: strategies/.cache
+          key: strat-cache-${{ github.run_id }}
+
+      - name: 保存策略頁面
+        uses: actions/cache/save@v4
+        with:
+          path: strategies/策略選股.html
+          key: strat-out-${{ github.run_id }}
+
+      - name: 觸發網站發布
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run zsigma-us.yml --ref "${{ github.ref_name }}" -f markets=none

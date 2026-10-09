@@ -7,6 +7,7 @@ import io
 import re
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -43,8 +44,11 @@ def _get(url, method="get", data=None, tries=4):
             r = requests.request(method, url, data=data, headers=UA, timeout=60)
             if r.status_code == 200 and "頻繁" not in r.text[:3000]:
                 return r
+            if r.status_code == 404:                       # 頁面不存在(還沒公布):不用重試
+                return None
+            print(f"  [retry {i + 1}] HTTP {r.status_code}{' 查詢過於頻繁' if '頻繁' in r.text[:3000] else ''}", flush=True)
         except requests.RequestException as e:
-            print(f"  [retry {i + 1}] {e}")
+            print(f"  [retry {i + 1}] {e}", flush=True)
         time.sleep(15 * (i + 1))
     return None
 
@@ -138,24 +142,40 @@ def _revenue_page(mkt, roc_y, m):
 def monthly_revenue(start_year=2018):
     """回傳 (當月營收, 去年同月增減%, 產業別);索引 = 次月 10 日(公告期限)。"""
     today = pd.Timestamp.today()
-    revs, yoys, industry = {}, {}, {}
+    months = []
     y, m = start_year, 1
     while (y, m) < (today.year, today.month):
-        avail = (pd.Timestamp(y, m, 1) + pd.offsets.MonthBegin(1)) + pd.Timedelta(days=9)
-        parts = []
-        for mkt in MKTS.values():
-            df = _revenue_page(mkt, y - 1911, m)
-            if df is not None:
-                parts.append(df)
-            time.sleep(0.6)
-        if parts:
-            df = pd.concat(parts).drop_duplicates("code").set_index("code")
-            revs[avail], yoys[avail] = df["rev"], df["yoy"]
-            industry.update(df["industry"].to_dict())
+        months.append((y, m))
         m += 1
         if m == 13:
             y, m = y + 1, 1
-    print(f"[revenue] {len(revs)} 個月")
+    jobs = [(mkt, y, m) for y, m in months for mkt in MKTS.values()]
+    todo = [j for j in jobs if not (CACHE / "rev" / f"{j[0]}_{j[1] - 1911}_{j[2]:02d}.pkl").exists()]
+    print(f"[revenue] {len(months)} 個月,快取已有 {len(jobs) - len(todo)} 頁,要抓 {len(todo)} 頁", flush=True)
+    done = 0
+
+    def one(job):
+        nonlocal done
+        mkt, y, m = job
+        df = _revenue_page(mkt, y - 1911, m)
+        done += 1
+        if done % 20 == 0:
+            print(f"[revenue] {done}/{len(jobs)}", flush=True)
+        return job, df
+
+    with ThreadPoolExecutor(4) as ex:                      # 靜態頁面,4 條同時抓
+        pages = dict(ex.map(one, jobs))
+
+    revs, yoys, industry = {}, {}, {}
+    for y, m in months:
+        parts = [pages[(mkt, y, m)] for mkt in MKTS.values() if pages.get((mkt, y, m)) is not None]
+        if not parts:
+            continue
+        avail = (pd.Timestamp(y, m, 1) + pd.offsets.MonthBegin(1)) + pd.Timedelta(days=9)
+        df = pd.concat(parts).drop_duplicates("code").set_index("code")
+        revs[avail], yoys[avail] = df["rev"], df["yoy"]
+        industry.update(df["industry"].to_dict())
+    print(f"[revenue] 完成 {len(revs)} 個月", flush=True)
     return pd.DataFrame(revs).T.sort_index(), pd.DataFrame(yoys).T.sort_index(), industry
 
 
@@ -225,16 +245,16 @@ def financials(start_year=2018):
     roe(近四季稅後淨利 ÷ 母公司權益,%)、op_growth(單季營業利益年增率,%)、eps_ttm(近四季 EPS)。"""
     today = pd.Timestamp.today()
     recs = []
-    for y in range(start_year, today.year + 1):
-        for s in (1, 2, 3, 4):
-            if _avail(y, s) > today:
+    quarters = [(y, s) for y in range(start_year, today.year + 1) for s in (1, 2, 3, 4) if _avail(y, s) <= today]
+    for n, (y, s) in enumerate(quarters, 1):
+        print(f"[fin] {y}Q{s} ({n}/{len(quarters)})", flush=True)
+        for mkt in MKTS.values():
+            inc, bal = _statement(mkt, y - 1911, s, "sb04"), _statement(mkt, y - 1911, s, "sb05")
+            if inc is None:
+                print(f"  {mkt} 損益表沒抓到", flush=True)
                 continue
-            for mkt in MKTS.values():
-                inc, bal = _statement(mkt, y - 1911, s, "sb04"), _statement(mkt, y - 1911, s, "sb05")
-                if inc is None:
-                    continue
-                df = inc.merge(bal, on="code", how="left") if bal is not None else inc.assign(equity=np.nan)
-                recs.append(df.assign(year=y, season=s))
+            df = inc.merge(bal, on="code", how="left") if bal is not None else inc.assign(equity=np.nan)
+            recs.append(df.assign(year=y, season=s))
     if not recs:
         raise RuntimeError("觀測站財報一筆都沒抓到")
     f = pd.concat(recs, ignore_index=True).drop_duplicates(["code", "year", "season"])

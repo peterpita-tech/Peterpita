@@ -10,15 +10,16 @@ on:
     - cron: "30 22 * * 1-5"
     # 重大訊息:台灣每天 17:50 / 19:50 / 21:50 / 23:50(含假日;其他排程也會順便更新)
     - cron: "50 9,11,13,15 * * *"
-    # 策略選股:台灣週一~週五 20:40(Yahoo 收盤價、觀測站月營收 / 財報都已更新)
-    - cron: "40 12 * * 1-5"
   workflow_dispatch:        # 可在 Actions 頁面手動執行
+    inputs:
+      markets:
+        description: "all = 美股 + 台股都重抓;none = 只發布(策略選股算完時用)"
+        default: all
   push:
     paths:
       - "zsigma-us/**"
       - "zsigma-tw/**"
       - "mops-news/**"
-      - "strategies/**"
       - ".github/workflows/zsigma-us.yml"
 
 permissions:
@@ -52,15 +53,15 @@ jobs:
       - name: 決定要更新哪個市場
         id: plan
         run: |
-          strat=false
+          if [ "${{ github.event_name }}" = workflow_dispatch ] && [ "${{ inputs.markets }}" = none ]; then
+            echo "us=false" >> "$GITHUB_OUTPUT"; echo "tw=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
           case "${{ github.event.schedule }}" in
             "30 22 * * 1-5") echo "us=true"  >> "$GITHUB_OUTPUT"; echo "tw=false" >> "$GITHUB_OUTPUT" ;;
             "50 9,11,13,15 * * *") echo "us=false" >> "$GITHUB_OUTPUT"; echo "tw=false" >> "$GITHUB_OUTPUT" ;;
-            "40 12 * * 1-5") echo "us=false" >> "$GITHUB_OUTPUT"; echo "tw=false" >> "$GITHUB_OUTPUT"; strat=true ;;
-            "")              echo "us=true"  >> "$GITHUB_OUTPUT"; echo "tw=true"  >> "$GITHUB_OUTPUT"; strat=true ;;
+            "")              echo "us=true"  >> "$GITHUB_OUTPUT"; echo "tw=true"  >> "$GITHUB_OUTPUT" ;;
             *)               echo "us=false" >> "$GITHUB_OUTPUT"; echo "tw=true"  >> "$GITHUB_OUTPUT" ;;
           esac
-          echo "strat=$strat" >> "$GITHUB_OUTPUT"
 
       - name: 安裝套件
         run: pip install -r zsigma-us/requirements.txt
@@ -94,23 +95,14 @@ jobs:
         working-directory: mops-news
         run: python fetch_mops_news.py --prev "$SITE/news/data.json"
 
-      # 觀測站歷史月營收 / 財報抓過就不會變,快取起來(第一次約 20 分鐘,之後幾分鐘)
-      - uses: actions/cache@v4
-        if: steps.plan.outputs.strat == 'true'
-        with:
-          path: strategies/.cache
-          key: strat-cache-${{ github.run_id }}
-          restore-keys: strat-cache-
-
-      - name: 策略選股:免費資料回測與最新選股
+      # 策略選股由 strategies.yml 另外計算,這裡只取最新一次的結果
+      - name: 取得策略選股頁面
         id: strat
-        if: steps.plan.outputs.strat == 'true'
-        continue-on-error: true
-        timeout-minutes: 45
-        working-directory: strategies
-        run: |
-          pip install -r requirements.txt
-          python fetch_strategies.py
+        uses: actions/cache/restore@v4
+        with:
+          path: strategies/策略選股.html
+          key: strat-out-${{ github.run_id }}
+          restore-keys: strat-out-
 
       # 沒更新(或失敗)的市場沿用網站上目前的版本
       - name: 準備網站檔案
@@ -118,7 +110,7 @@ jobs:
           US: ${{ steps.us.outcome }}
           TW: ${{ steps.tw.outcome }}
           NEWS: ${{ steps.news.outcome }}
-          STRAT: ${{ steps.strat.outcome }}
+          STRAT: ${{ hashFiles('strategies/策略選股.html') != '' && 'success' || 'missing' }}
         run: |
           mkdir -p _site/tw _site/news _site/strategies
           touch _site/.nojekyll
@@ -144,7 +136,6 @@ jobs:
           if [ "$STRAT" = success ]; then
             cp "strategies/策略選股.html" _site/strategies/index.html
           else
-            [ "$STRAT" = failure ] && echo "::warning::策略選股更新失敗,沿用網站上的舊版"
             curl -fsSL "$SITE/strategies/" -o _site/strategies/index.html || cp strategies/index.html _site/strategies/index.html
           fi
           if [ "$US" != success ] && [ "$TW" != success ] && [ "$NEWS" != success ] && [ "$STRAT" != success ]; then
