@@ -45,7 +45,7 @@ def hold_until_stop(entry, exit_, price, stop):
 def rebalance_dates(index, rule):
     """'D' → 每個交易日;'W' / 'M' / 'Q' → 該週 / 月 / 季最後一個交易日;日期序列 → 當天或之後第一個交易日。"""
     s = index.to_series()
-    if rule == "D":
+    if isinstance(rule, str) and rule == "D":
         return pd.DatetimeIndex(index)
     if isinstance(rule, str):
         freq = {"W": "W", "M": "M", "Q": "Q"}[rule]
