@@ -156,9 +156,21 @@ function show(id,scroll){
         <div class="pb"><div class="chartbox"><canvas id="eq"></canvas></div></div></div>
       <div class="panel"><div class="ph">選股條件</div><div class="pb">${rules}</div></div>
     </div>
-    <div class="panel"><div class="ph">最新選股 <small>訊號日 ${esc(s.signalDate)} · 共 ${s.picks.length} 檔 · 等權重</small></div>${picks}</div>`;
+    <div class="panel"><div class="ph">最新選股 <small>訊號日 ${esc(s.signalDate)} · 共 ${s.picks.length} 檔 · 等權重</small></div>${picks}</div>
+    ${s.watch?watchTable(s.watch):""}`;
   drawChart(s);
   if(scroll) document.getElementById("tabs").scrollIntoView({behavior:"smooth"});
+}
+
+function watchTable(w){
+  const body=w.picks.length?`<div class="scroll"><table>
+      <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th>收盤</th><th>漲跌%</th><th>${esc(w.metricLabel)}</th><th>${esc(w.extraLabel)}</th></tr></thead>
+      <tbody>${w.picks.map(p=>`<tr><td class="code"><a href="${yhref(p.code)}" target="_blank" rel="noopener">${esc(p.code)}</a></td>
+        <td>${esc(p.name)}</td><td class="ind">${esc(p.industry)}</td><td>${f(p.close,2)}</td>
+        <td><span class="chip ${cls(p.chg)}">${p.chg==null?"—":(p.chg>0?"+":"")+f(p.chg,2)+"%"}</span></td>
+        <td>${esc(p.metric??"—")}</td><td>${esc(p.extra??"—")}</td></tr>`).join("")}</tbody></table></div>`
+    :`<div class="empty">目前沒有符合條件的股票</div>`;
+  return `<div class="panel"><div class="ph">${esc(w.title)} <small>共 ${w.picks.length} 檔 · 突破樞紐點且放量才進場</small></div>${body}</div>`;
 }
 
 function drawChart(s){

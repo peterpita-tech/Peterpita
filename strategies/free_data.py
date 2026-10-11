@@ -55,7 +55,7 @@ def _get(url, method="get", data=None, tries=4):
 
 # ---------------------------------------------------------------- prices
 def prices(codes_mkt, start="2018-06-01", chunk=150):
-    """回傳 dict:close(原始收盤)、adj_close、adj_open(還原開盤)、volume(股),欄 = 股票代號。"""
+    """回傳 dict:close(原始收盤)、adj_close、adj_open / adj_high / adj_low(還原)、volume(股),欄 = 股票代號。"""
     sym = {c: f"{c}.{'TW' if m == '上市' else 'TWO'}" for c, m in codes_mkt.items()}
     sym["0050"] = "0050.TW"                                   # 大盤基準
     rev = {v: k for k, v in sym.items()}
@@ -93,7 +93,8 @@ def prices(codes_mkt, start="2018-06-01", chunk=150):
 
     close, adj, opn, vol = wide("Close"), wide("Adj Close"), wide("Open"), wide("Volume")
     factor = (adj / close).where(close > 0)
-    out = {"close": close, "adj_close": adj, "adj_open": opn * factor, "volume": vol}
+    out = {"close": close, "adj_close": adj, "adj_open": opn * factor, "adj_high": wide("High") * factor,
+           "adj_low": wide("Low") * factor, "volume": vol}
     for k, v in out.items():
         v.index = pd.DatetimeIndex(v.index).tz_localize(None).normalize()
         out[k] = v[~v.index.duplicated(keep="last")]

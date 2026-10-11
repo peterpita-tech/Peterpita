@@ -23,6 +23,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "strategies"))
 sys.path.insert(0, str(HERE.parent / "zsigma-us"))
 import backtest as bt  # noqa: E402
+import vcp as V  # noqa: E402
 from fetch_zsigma_us import get_universe  # noqa: E402
 
 import sec_data  # noqa: E402
@@ -91,10 +92,8 @@ class Data:
         self.dollar_vol = (self.close * self.volume).rolling(20).mean()
         self.liquid = (self.dollar_vol > 5e6) & (self.close > 5)            # 日均成交額 > 500 萬美元、股價 > 5
         a = self.adj
-        self.ma50, self.ma150, self.ma200 = a.rolling(50).mean(), a.rolling(150).mean(), a.rolling(200).mean()
-        # IBD 式相對強度:近 3/6/9/12 月報酬加權,換算成全市場百分位(0~99)
-        raw = 0.4 * a.pct_change(63) + 0.2 * a.pct_change(126) + 0.2 * a.pct_change(189) + 0.2 * a.pct_change(252)
-        self.rs = (raw.where(self.liquid).rank(axis=1, pct=True) * 99).round()
+        self.ma50 = a.rolling(50).mean()
+        self.rs = V.rs_rating(a, self.liquid)                                 # IBD 式相對強度(0~99)
         # 財報(SEC EDGAR);沒設定 SEC_USER_AGENT 或抓失敗時退回純價格版本
         self.fund = None
         try:
@@ -126,44 +125,21 @@ def largest(df, n):
 
 # ---------------------------------------------------------------- Minervini
 def trend_template(D):
-    """Minervini 趨勢模板(第二階段上升趨勢)8 條件。"""
-    a = D.adj
-    hi52, lo52 = D.high.rolling(252).max(), D.low.rolling(252).min()
-    return ((a > D.ma150) & (a > D.ma200)                  # 1. 股價在 150、200 日均線之上
-            & (D.ma150 > D.ma200)                          # 2. 150 日均線 > 200 日均線
-            & (D.ma200 > D.ma200.shift(21))                # 3. 200 日均線至少上升 1 個月
-            & (D.ma50 > D.ma150) & (D.ma50 > D.ma200)      # 4. 50 日均線在 150、200 之上
-            & (a > D.ma50)                                 # 5. 股價在 50 日均線之上
-            & (a >= lo52 * 1.30)                           # 6. 比 52 週低點高 30% 以上
-            & (a >= hi52 * 0.75)                           # 7. 距 52 週高點 25% 以內
-            & (D.rs >= 70))                                # 8. 相對強度 ≥ 70
-
-
-def vcp(D):
-    """波動收縮:近 60 日切成 3 段(各 20 日),每段高低幅度依序縮小,最後一段 ≤ 10%,且量縮。"""
-    hi, lo = D.high.rolling(20).max(), D.low.rolling(20).min()
-    depth = (hi - lo) / hi
-    d1, d2, d3 = depth.shift(40), depth.shift(20), depth
-    contract = (d1 > d2) & (d2 > d3) & (d3 <= 0.10) & (d1 <= 0.35)
-    vol50 = D.volume.rolling(50).mean()
-    dry = D.volume.rolling(10).mean() < 0.75 * vol50          # 最後收縮段量縮
-    pivot = hi                                                # 樞紐點 = 最後收縮段的高點
-    return contract & dry, pivot, vol50, d1, d3
+    return V.trend_template(D.adj, D.high, D.low, D.rs)
 
 
 def vcp_breakout(D):
-    tt = trend_template(D)
-    setup, pivot, vol50, d1, d3 = vcp(D)
-    breakout = (tt & D.liquid & setup.shift(1).fillna(False).astype(bool)
-                & (D.adj > pivot.shift(1)) & (D.volume > 1.5 * vol50.shift(1)))   # 放量突破樞紐點
+    tt = trend_template(D) & D.liquid
+    v = V.detect(D.high, D.low, D.volume, tt)
+    entry = tt & V.breakout(D.adj, D.volume, v)                                    # 放量突破樞紐點
     exit_ = D.adj < D.ma50                                                         # 跌破 50 日均線出場
-    held = bt.hold_until_stop(breakout, exit_, D.adj, stop=0.08)                   # 停損 8%
+    held = bt.hold_until_stop(entry, exit_, D.adj, stop=0.08)                      # 停損 8%
     held = held & largest(D.rs.where(held), 20)                                    # 最多 20 檔,取 RS 最強
-    # 觀察名單:已有 VCP、距樞紐點 5% 內、還沒突破
-    watch = tt & D.liquid & setup & (D.adj >= pivot * 0.95) & (D.adj <= pivot)
+    # 觀察名單:已形成 VCP、距樞紐點 5% 內、還沒突破
+    watch = v["setup"] & (D.adj >= v["pivot"] * 0.95)
     return held, "D", {"slots": 20}, ("RS", D.rs, "{:.0f}", False), {
-        "frame": watch, "metric": ("距樞紐點", (D.adj / pivot - 1) * 100, "{:+.1f}%", False),
-        "extra": ("最後收縮幅度", d3 * 100, "{:.1f}%")}
+        "frame": watch, "metric": ("距樞紐點", (D.adj / v["pivot"] - 1) * 100, "{:+.1f}%", False),
+        "extra": ("收縮", v["desc"])}
 
 
 def trend_rs(D):
@@ -223,9 +199,10 @@ def peg(D):
 STRATEGIES = [
     dict(id="vcp", fn=vcp_breakout, name="VCP 突破", rebalance="每日檢查;跌破 50 日均線或虧損 8% 出場;每檔 5% 資金,最多 20 檔",
          rules=["符合 Minervini 趨勢模板 8 條件(含 RS ≥ 70)",
-                "近 60 日分 3 段,高低幅度依序縮小,最後一段 ≤ 10%(第一段 ≤ 35%)",
-                "最後 10 日均量 < 50 日均量 × 0.75(量縮)",
-                "收盤突破樞紐點(最後一段高點),且成交量 > 50 日均量 × 1.5",
+                "收縮 2~4 次,每次約前一次的一半(0.25~0.75 倍)",
+                "總深度(第一次收縮)10~35%,底部 3~65 週",
+                "最後一次收縮的平均量 < 50 日均量(量縮)",
+                "收盤突破樞紐點(最後收縮的高點),且成交量 > 50 日均量 × 1.5",
                 "日均成交額 > 500 萬美元、股價 > $5"]),
     dict(id="trend", fn=trend_rs, name="趨勢模板 RS 前 20", rebalance="每月換股",
          rules=["股價 > 150 日、200 日均線,150 日 > 200 日", "200 日均線至少上升 1 個月",
@@ -279,8 +256,7 @@ def picks_of(D, frame, metric, extra=None):
              "close": num(D.close[c].iloc[-1], 2), "chg": num(chg.get(c), 2),
              "metric": None if m is None else fmt.format(m), "metricRaw": m}
         if extra:
-            e = num(extra[1].loc[when].get(c))
-            p["extra"] = None if e is None else extra[2].format(e)
+            p["extra"] = extra[1].get(c)
         out.append(p)
     sign = 1 if ascending else -1
     out.sort(key=lambda p: (p["metricRaw"] is None, sign * (p["metricRaw"] or 0)))

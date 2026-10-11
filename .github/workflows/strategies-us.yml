@@ -10,6 +10,7 @@ on:
     paths:
       - "strategies-us/**"
       - "strategies/backtest.py"
+      - "strategies/vcp.py"
       - ".github/workflows/strategies-us.yml"
 
 permissions:

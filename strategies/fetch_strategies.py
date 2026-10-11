@@ -20,6 +20,7 @@ import pandas as pd
 
 import backtest as bt
 import free_data as fd
+import vcp as V
 
 HERE = Path(__file__).resolve().parent
 FEE, TAX = 0.001425, 0.003
@@ -37,8 +38,10 @@ class Data:
         self.close = px["close"][cols]
         self.adj = px["adj_close"][cols]
         self.adj_open = px["adj_open"][cols]
+        self.high, self.low = px["adj_high"][cols], px["adj_low"][cols]
         self.volume = px["volume"][cols]
         idx = self.adj.index
+        self.rs = V.rs_rating(self.adj, universe(self))                   # 相對強度(0~99)
 
         self.rev, self.yoy_m, self.industry = fd.monthly_revenue(2018)
         self.rev = self.rev.reindex(columns=cols)
@@ -71,7 +74,21 @@ def universe(D):
 
 
 # ---------------------------------------------------------------- strategies
-# 回傳 (position, 換股規則, 回測參數, 選股表指標 (名稱, DataFrame, 格式, 是否由小到大排))
+# 回傳 (position, 換股規則, 回測參數, 選股表指標 (名稱, DataFrame, 格式, 是否由小到大排)[, 觀察名單])
+def vcp_breakout(D):
+    """Minervini VCP:趨勢模板 + 波動收縮 + 量縮後放量突破樞紐點。"""
+    tt = V.trend_template(D.adj, D.high, D.low, D.rs) & universe(D)
+    v = V.detect(D.high, D.low, D.volume, tt)
+    entry = tt & V.breakout(D.adj, D.volume, v)
+    exit_ = D.adj < D.adj.rolling(50).mean()                                      # 跌破 50 日均線出場
+    held = bt.hold_until_stop(entry, exit_, D.adj, stop=0.08)                      # 停損 8%
+    held = held & largest(D.rs.where(held), 20)                                    # 最多 20 檔,取 RS 最強
+    watch = v["setup"] & (D.adj >= v["pivot"] * 0.95)                              # 距樞紐點 5% 內、還沒突破
+    return held, "D", {"slots": 20}, ("RS", D.rs, "{:.0f}", False), {
+        "frame": watch, "metric": ("距樞紐點", (D.adj / v["pivot"] - 1) * 100, "{:+.1f}%", False),
+        "extra": ("收縮", v["desc"])}
+
+
 def rsi3(D):
     rsi20, rsi60, rsi120 = rsi(D.adj, 20), rsi(D.adj, 60), rsi(D.adj, 120)
     buy = ((rsi120 > 55)                                   # 長週期上漲
@@ -117,6 +134,13 @@ def peg(D):
 
 
 STRATEGIES = [
+    dict(id="vcp", fn=vcp_breakout, name="VCP 突破", rebalance="每日檢查;跌破 50 日均線或虧損 8% 出場;每檔 5% 資金,最多 20 檔",
+         rules=["符合 Minervini 趨勢模板 8 條件(含 RS ≥ 70)",
+                "收縮 2~4 次,每次約前一次的一半(0.25~0.75 倍)",
+                "總深度(第一次收縮)10~35%,底部 3~65 週",
+                "最後一次收縮的平均量 < 50 日均量(量縮)",
+                "收盤突破樞紐點(最後收縮的高點),且成交量 > 50 日均量 × 1.5",
+                "平均日成交 > 100 張"]),
     dict(id="rsi3", fn=rsi3, name="三頻率 RSI", rebalance="每週檢查,持有 60 天或跌破季線出場",
          rules=["RSI120 > 55(長週期上漲)", "RSI60 < 75(中週期別過熱)", "RSI20 三日漲幅 > 2%",
                 "RSI20 > 75 連續 3 天(高檔鈍化)", "ROE(近四季)> 0"]),
@@ -150,7 +174,7 @@ def series_points(s, every="W"):
     return [[d.strftime("%Y-%m-%d"), num(v)] for d, v in s.items()]
 
 
-def latest_picks(D, position, metric):
+def latest_picks(D, position, metric, extra=None):
     when = position.index[-1]
     row = position.loc[when].fillna(False).astype(bool)
     codes = [str(c) for c in row[row].index]
@@ -163,25 +187,34 @@ def latest_picks(D, position, metric):
         picks.append({"code": c, "name": D.names.get(c, ""), "industry": D.industry.get(c, ""),
                       "close": num(D.close[c].iloc[-1], 2), "chg": num(chg.get(c), 2),
                       "metric": None if m is None else fmt.format(m), "metricRaw": m})
+        if extra:
+            picks[-1]["extra"] = extra[1].get(c)
     sign = 1 if ascending else -1
     picks.sort(key=lambda p: (p["metricRaw"] is None, sign * (p["metricRaw"] or 0)))
     return when, label, picks
 
 
 def run_one(D, spec):
-    position, rule, kw, metric = spec["fn"](D)
+    position, rule, kw, metric, *watch = spec["fn"](D)
     position = position.reindex(index=D.adj.index, columns=D.adj.columns).fillna(False).astype(bool)
     eq, stats = bt.run(position, D.adj_open, D.adj, rule, start=START,
-                       fee=kw.get("fee", FEE), tax=kw.get("tax", TAX), stop_loss=kw.get("stop_loss"))
+                       fee=kw.get("fee", FEE), tax=kw.get("tax", TAX), stop_loss=kw.get("stop_loss"),
+                       slots=kw.get("slots"))
     bench = D.bench.reindex(eq.index).ffill().dropna() if D.bench is not None else pd.Series(dtype=float)
     when, label, picks = latest_picks(D, position, metric)
-    return {
+    out = {
         "id": spec["id"], "name": spec["name"], "rebalance": spec["rebalance"], "rules": spec["rules"],
         "stats": {k: num(stats.get(k)) for k in ("cagr", "max_drawdown", "daily_sharpe", "win_ratio", "avg_n_stock")},
         "start": eq.index[0].strftime("%Y-%m-%d"), "end": eq.index[-1].strftime("%Y-%m-%d"),
         "equity": series_points(eq), "bench": series_points(bench / bench.iloc[0]) if len(bench) else [],
         "signalDate": pd.Timestamp(when).strftime("%Y-%m-%d"), "metricLabel": label, "picks": picks,
     }
+    if watch:
+        w = watch[0]
+        _, wlabel, wpicks = latest_picks(D, w["frame"], w["metric"], w["extra"])
+        out["watch"] = {"title": "觀察名單:已形成 VCP、距樞紐點 5% 內、尚未突破", "metricLabel": wlabel,
+                        "extraLabel": w["extra"][0], "picks": wpicks}
+    return out
 
 
 def main():
@@ -192,7 +225,8 @@ def main():
         try:
             out.append(run_one(D, spec))
             s = out[-1]
-            print(f"[ok]  {spec['name']}: 選 {len(s['picks'])} 檔,CAGR {s['stats']['cagr']},MDD {s['stats']['max_drawdown']}")
+            print(f"[ok]  {spec['name']}: 選 {len(s['picks'])} 檔,CAGR {s['stats']['cagr']},MDD {s['stats']['max_drawdown']}"
+                  + (f",觀察 {len(s['watch']['picks'])} 檔" if "watch" in s else ""), flush=True)
         except Exception as e:  # noqa: BLE001
             traceback.print_exc()
             out.append({"id": spec["id"], "name": spec["name"], "rebalance": spec["rebalance"],
