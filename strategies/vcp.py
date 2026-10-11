@@ -72,30 +72,42 @@ def detect(high, low, volume, candidates):
     shape = high.shape
     setup = np.zeros(shape, bool)
     pivot, depth, last = (np.full(shape, np.nan) for _ in range(3))
-    H, L, V, V50 = (x.to_numpy(float) for x in (high, low, volume, vol50))
+    # Yahoo 偶爾缺幾天(台股常見):高低價沿用前值,避免整段底部因一天缺資料被跳過
+    H, L = (x.ffill(limit=10).to_numpy(float) for x in (high, low))
+    V, V50 = volume.to_numpy(float), vol50.to_numpy(float)
     C = candidates.reindex_like(high).fillna(False).to_numpy(bool)
     desc = {}
+    funnel = dict.fromkeys(["候選", "底部 3~65 週", "收縮 2~4 次", "總深度 10~35%", "每次約減半", "最後收縮量縮"], 0)
+    last_t = shape[0] - 1
     for k in range(shape[1]):
         h, l, v, v50 = H[:, k], L[:, k], V[:, k], V50[:, k]
         for t in np.flatnonzero(C[:, k]):
+            tick = (lambda key: funnel.__setitem__(key, funnel[key] + 1)) if t == last_t else (lambda key: None)
+            tick("候選")
             r = contractions(h, l, t)
             if r is None:
                 continue
+            tick("底部 3~65 週")
             start, cs = r
             if not MIN_CONTRACTIONS <= len(cs) <= MAX_CONTRACTIONS:
                 continue
+            tick("收縮 2~4 次")
             ds = [d for _, d in cs]
             if not DEPTH_RANGE[0] <= ds[0] <= DEPTH_RANGE[1]:
                 continue
+            tick("總深度 10~35%")
             if not all(RATIO_RANGE[0] <= b / a <= RATIO_RANGE[1] for a, b in zip(ds, ds[1:])):
                 continue
+            tick("每次約減半")
             p = cs[-1][0]
             if not np.nanmean(v[p:t + 1]) < v50[t]:          # 最後收縮量縮
                 continue
+            tick("最後收縮量縮")
             setup[t, k], pivot[t, k], depth[t, k], last[t, k] = True, h[p], ds[0], ds[-1]
             if t == shape[0] - 1:
                 desc[high.columns[k]] = (f"{len(ds)} 次:" + "→".join(f"{d * 100:.0f}%" for d in ds)
                                          + f" · 底部 {(t - start) / 5:.0f} 週")
+    print("[vcp] 最新一天篩選漏斗:" + " → ".join(f"{k} {n}" for k, n in funnel.items()), flush=True)
     frame = lambda a: pd.DataFrame(a, high.index, high.columns)  # noqa: E731
     return {"setup": frame(setup), "pivot": frame(pivot), "vol50": vol50, "depth": frame(depth),
             "last": frame(last), "desc": pd.Series(desc, dtype=object)}
