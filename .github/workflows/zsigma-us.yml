@@ -20,6 +20,7 @@ on:
       - "zsigma-us/**"
       - "zsigma-tw/**"
       - "mops-news/**"
+      - "patterns/**"
       - ".github/workflows/zsigma-us.yml"
 
 permissions:
@@ -54,8 +55,13 @@ jobs:
         id: plan
         run: |
           if [ "${{ github.event_name }}" = workflow_dispatch ] && [ "${{ inputs.markets }}" = none ]; then
-            echo "us=false" >> "$GITHUB_OUTPUT"; echo "tw=false" >> "$GITHUB_OUTPUT"; exit 0
+            echo "us=false" >> "$GITHUB_OUTPUT"; echo "tw=false" >> "$GITHUB_OUTPUT"; echo "pat=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
+          # K 線型態只在台股收盤後(15:30)、push、手動執行時掃描;盤中 K 棒還沒走完
+          case "${{ github.event.schedule }}" in
+            "30 7 * * 1-5"|"") echo "pat=true"  >> "$GITHUB_OUTPUT" ;;
+            *)                 echo "pat=false" >> "$GITHUB_OUTPUT" ;;
+          esac
           case "${{ github.event.schedule }}" in
             "30 22 * * 1-5") echo "us=true"  >> "$GITHUB_OUTPUT"; echo "tw=false" >> "$GITHUB_OUTPUT" ;;
             "50 9,11,13,15 * * *") echo "us=false" >> "$GITHUB_OUTPUT"; echo "tw=false" >> "$GITHUB_OUTPUT" ;;
@@ -88,6 +94,13 @@ jobs:
         working-directory: zsigma-tw
         run: python fetch_zsigma_tw.py
 
+      - name: 台股 K 線型態篩選
+        id: pat
+        if: steps.plan.outputs.pat == 'true'
+        continue-on-error: true
+        working-directory: patterns
+        run: python fetch_patterns.py
+
       # 重大訊息每次都更新;OpenAPI 只給當天資料,和網站上的上一版合併累積歷史
       - name: 台股重大訊息:公開資訊觀測站
         id: news
@@ -117,10 +130,11 @@ jobs:
           US: ${{ steps.us.outcome }}
           TW: ${{ steps.tw.outcome }}
           NEWS: ${{ steps.news.outcome }}
+          PAT: ${{ steps.pat.outcome }}
           STRAT: ${{ hashFiles('strategies/策略選股.html') != '' && 'success' || 'missing' }}
           STRAT_US: ${{ hashFiles('strategies-us/策略選股_美股.html') != '' && 'success' || 'missing' }}
         run: |
-          mkdir -p _site/tw _site/news _site/strategies _site/strategies-us
+          mkdir -p _site/tw _site/news _site/strategies _site/strategies-us _site/patterns
           touch _site/.nojekyll
           if [ "$US" = success ]; then
             cp "zsigma-us/籌碼結構掃描_美股.html" _site/index.html
@@ -145,6 +159,12 @@ jobs:
             cp "strategies/策略選股.html" _site/strategies/index.html
           else
             curl -fsSL "$SITE/strategies/" -o _site/strategies/index.html || cp strategies/index.html _site/strategies/index.html
+          fi
+          if [ "$PAT" = success ]; then
+            cp "patterns/K線型態_台股.html" _site/patterns/index.html
+          else
+            [ "$PAT" = failure ] && echo "::warning::K 線型態更新失敗,沿用網站上的舊版"
+            curl -fsSL "$SITE/patterns/" -o _site/patterns/index.html || cp patterns/index.html _site/patterns/index.html
           fi
           if [ "$STRAT_US" = success ]; then
             cp "strategies-us/策略選股_美股.html" _site/strategies-us/index.html

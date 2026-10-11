@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>K 線型態篩選 · 台股</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#141925; --panel2:#1b2231; --line:#2a3346;
+    --txt:#e6ebf2; --muted:#8b97ad; --dim:#5f6b80;
+    --up:#ff4d4f; --down:#13c267; --upbg:rgba(255,77,79,.14); --downbg:rgba(19,194,103,.14);   /* 台股:紅漲綠跌 */
+    --accent:#4da3ff; --amber:#ffb020; --purple:#a779ff;
+    --shadow:0 8px 28px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:"Noto Sans TC","Segoe UI",-apple-system,sans-serif;line-height:1.45;padding:20px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1380px;margin:0 auto}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  h1{font-size:22px;font-weight:700}
+  h1 .sub{color:var(--accent)}
+  .meta{color:var(--muted);font-size:12.5px;margin-top:3px}
+  .meta b{color:var(--txt)}
+  .links{display:flex;gap:8px;flex-wrap:wrap}
+  .switch{background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:7px 14px;border-radius:9px;font-size:13px;font-weight:600;text-decoration:none}
+  .switch:hover{border-color:var(--accent);color:var(--txt)}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow)}
+  .kpi .k{color:var(--muted);font-size:12px}
+  .kpi .v{font-size:22px;font-weight:700;margin-top:3px}
+  .kpi .v small{font-size:13px;color:var(--muted);font-weight:500}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);margin-bottom:14px}
+  .ph{padding:11px 15px;border-bottom:1px solid var(--line);font-size:14px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .ph small{color:var(--muted);font-weight:500;font-size:12px}
+  .pb{padding:13px 15px}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .row+.row{margin-top:10px}
+  .seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{background:none;border:none;color:var(--muted);padding:7px 13px;cursor:pointer;font-size:13px;font-weight:600}
+  .seg button.on{background:var(--accent);color:#06101e}
+  input[type=text]{background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:7px 12px;font-size:13px;width:180px;outline:none}
+  input[type=text]:focus{border-color:var(--accent)}
+  label.chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer}
+  label.chk input{accent-color:var(--accent)}
+
+  .groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:14px}
+  .group h3{font-size:13px;color:var(--muted);margin:0 0 8px}
+  .cards{display:flex;flex-wrap:wrap;gap:7px}
+  .pc{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:6px 10px;cursor:pointer;font-size:12.5px;display:flex;gap:7px;align-items:center}
+  .pc:hover{border-color:var(--accent)}
+  .pc.on{border-color:var(--accent);background:rgba(77,163,255,.14)}
+  .pc.zero{opacity:.4}
+  .pc .n{font-weight:700;font-variant-numeric:tabular-nums}
+  .pc.bull .n{color:var(--up)} .pc.bear .n{color:var(--down)} .pc.neutral .n{color:var(--amber)}
+
+  .scroll{overflow-x:auto;max-height:70vh;overflow-y:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{position:sticky;top:0;background:var(--panel2);color:var(--muted);font-weight:600;font-size:12px;text-align:right;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer}
+  thead th:hover{color:var(--txt)}
+  td{padding:7px 10px;text-align:right;border-bottom:1px solid rgba(42,51,70,.5);font-variant-numeric:tabular-nums;white-space:nowrap}
+  th:nth-child(-n+5),td:nth-child(-n+5){text-align:left}
+  .up{color:var(--up)} .down{color:var(--down)} .neu{color:var(--muted)}
+  .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600}
+  .chip.up{background:var(--upbg)} .chip.down{background:var(--downbg)}
+  .tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:6px;font-weight:600;border:1px solid}
+  .tag.bull{color:var(--up);border-color:rgba(255,77,79,.4)} .tag.bear{color:var(--down);border-color:rgba(19,194,103,.4)}
+  .tag.neutral{color:var(--amber);border-color:rgba(255,176,32,.4)}
+  .code a{color:var(--txt);font-weight:700;text-decoration:none}
+  .code a:hover{color:var(--accent);text-decoration:underline}
+  .mk{font-size:10px;padding:1px 6px;border-radius:5px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+  .wait{color:var(--amber);font-size:12px}
+  .empty{color:var(--muted);text-align:center;padding:30px}
+
+  details.gloss summary{cursor:pointer;font-size:14px;font-weight:700;padding:11px 15px}
+  .gl{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;padding:0 15px 15px}
+  .gl div{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:12.5px;color:var(--muted)}
+  .gl b{color:var(--txt)}
+  ol.rules{padding:0 15px 15px 36px;font-size:13px;color:var(--muted)}
+  ol.rules li{margin:5px 0}
+  ol.rules b{color:var(--txt)}
+  footer{color:var(--dim);font-size:11.5px;text-align:center;margin-top:20px;line-height:1.7}
+  @media(max-width:860px){body{padding:12px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1><span class="sub">K 線型態</span>篩選 · 台股</h1>
+      <div class="meta" id="meta">載入中 …</div>
+    </div>
+    <div class="links">
+      <a class="switch" href="https://peterpita-tech.github.io/Peterpita/tw/">🇹🇼 籌碼掃描</a>
+      <a class="switch" href="https://peterpita-tech.github.io/Peterpita/strategies/">📈 策略選股</a>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="panel"><div class="pb">
+    <div class="row">
+      <div class="seg" id="dateSeg"></div>
+      <div class="seg" id="sideSeg">
+        <button class="on" data-v="all">全部</button><button data-v="bull">多頭</button>
+        <button data-v="bear">空頭</button><button data-v="neutral">中性</button>
+      </div>
+      <div class="seg" id="mktSeg">
+        <button class="on" data-v="all">全部</button><button data-v="上市">上市</button><button data-v="上櫃">上櫃</button>
+      </div>
+      <input type="text" id="search" placeholder="搜尋代號 / 名稱 …">
+      <label class="chk"><input type="checkbox" id="liquid" checked>成交熱絡(20 日均額 ≥ 1,000 萬)</label>
+      <label class="chk"><input type="checkbox" id="vol">放量(量比 ≥ 1.5)</label>
+    </div>
+  </div></div>
+
+  <div class="groups" id="groups"></div>
+
+  <div class="panel">
+    <div class="ph"><span id="cnt"></span><small>點型態卡片可篩選 · 點表頭排序 · 支撐/壓力 = 型態極端價(Nison 原則 4,也是停損參考)</small></div>
+    <div class="scroll"><table>
+      <thead><tr id="thr"></tr></thead>
+      <tbody id="tb"><tr><td class="empty" colspan="12">載入中 …</td></tr></tbody>
+    </table></div>
+  </div>
+
+  <div class="panel"><details class="gloss">
+    <summary>📚 Nison 的通用使用原則</summary>
+    <ol class="rules">
+      <li><b>先有趨勢才有反轉</b>:箱型整理中的反轉型態沒有意義(本頁反轉型態都要求前面有 10 日 ±5% 的趨勢)。</li>
+      <li><b>順主要趨勢操作</b>:多頭市場中的頂部訊號只用來了結多單,不用來放空。</li>
+      <li><b>先算風險報酬</b>:三根線形的型態完成時價格常已走遠,可等回測型態支撐/壓力再進場;接近壓力的多頭訊號不宜買。</li>
+      <li><b>型態的極端價即停損點</b>:吞噬、烏雲、晨夜星的高(低)點是後續壓力(支撐),以收盤突破為準。</li>
+      <li><b>陰陽線不提供目標價</b>:目標價要靠支撐壓力、趨勢線、型態衡量等西方工具。</li>
+      <li><b>訊號匯集</b>:多個 K 線或西方訊號(趨勢線、折返 38/50/62%、均線、成交量)落在同一價位,反轉機率更高。</li>
+      <li><b>保留彈性</b>:非標準型態看「結構」加「市況大局」。</li>
+    </ol>
+  </details></div>
+
+  <div class="panel"><details class="gloss">
+    <summary>📖 型態定義(依《陰線陽線》,頁碼為原書頁碼)</summary>
+    <div class="gl" id="gloss"></div>
+  </details></div>
+
+  <footer>
+    K 線型態篩選 · 型態定義:Steve Nison《陰線陽線(增訂第二版)》第 3–9 章 · 資料:TWSE / TPEx 代號表、Yahoo Finance 日線(型態以還原權值價格判斷)· 每個交易日收盤後更新<br>
+    書中型態是文字描述,本頁把「長線形、小實體、十字線、趨勢」量化成固定門檻,與人眼判讀可能不同 · 僅供研究參考,不構成投資建議 · 台股漲跌色:紅漲綠跌
+  </footer>
+</div>
+
+<!--DATA-->
+<script>
+let DATA=null, P={}, rows=[];
+const st={date:null, side:"all", mkt:"all", q:"", liquid:true, vol:false, pat:null, sortKey:"volR", sortDir:-1};
+const f=(n,d=2)=> n==null?"—":Number(n).toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
+const sgn=(v,d=2)=> v==null?"—":(v>0?"+":"")+f(v,d);
+const cls=v=> v>0?"up":(v<0?"down":"neu");
+const esc=s=> String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const yhref=(c,m)=> `https://tw.stock.yahoo.com/quote/${encodeURIComponent(c)}.${m==="上櫃"?"TWO":"TW"}`;
+const SIDE={bull:"多",bear:"空",neutral:"中性"};
+const GROUPS=[["多頭反轉 / 星形",p=>p.side==="bull"&&p.kind!=="continuation"],["空頭反轉 / 星形",p=>p.side==="bear"&&p.kind!=="continuation"],
+              ["連續型態(窗口、三法)",p=>p.kind==="continuation"],["中性十字線",p=>p.side==="neutral"]];
+
+const COLS=[
+  {k:"date",t:"日期",fmt:r=>r.date.slice(5)},
+  {k:"code",t:"代號",fmt:r=>`<span class="code"><a href="${yhref(r.code,r.mkt)}" target="_blank" rel="noopener">${esc(r.code)}</a></span>`},
+  {k:"name",t:"名稱",fmt:r=>esc(r.name)},
+  {k:"mkt",t:"市場",fmt:r=>`<span class="mk">${esc(r.mkt)}</span>`},
+  {k:"p",t:"型態",fmt:r=>{const p=P[r.p];return `<span class="tag ${p.side}">${esc(p.name)}</span>`+(p.confirm?` ${r.confirmed==null?'<span class="wait">待確認</span>':(r.confirmed?'<span class="up">已確認</span>':'<span class="neu">未確認</span>')}`:"")}},
+  {k:"close",t:"當日收盤",fmt:r=>f(r.close)},
+  {k:"chg",t:"當日漲跌",fmt:r=>`<span class="chip ${cls(r.chg)}">${sgn(r.chg)}%</span>`},
+  {k:"volR",t:"量比",fmt:r=>`<span class="${r.volR>=1.5?'up':''}">${f(r.volR)}</span>`},
+  {k:"level",t:"支撐/壓力",fmt:r=>r.level==null?"—":`${f(r.level)} <span class="neu">${P[r.p].stop==="high"||(P[r.p].stop==="window"&&P[r.p].side==="bear")?"壓":"撐"}</span>`},
+  {k:"now",t:"最新收盤",fmt:r=>f(r.now)},
+  {k:"dist",t:"距支撐/壓力",fmt:r=>r.dist==null?"—":`<span class="${cls(r.dist)}">${sgn(r.dist,1)}%</span>`},
+  {k:"page",t:"頁碼",fmt:r=>`<span class="neu">p.${P[r.p].page}</span>`},
+];
+
+function base(){            // 套用日期以外的篩選(卡片計數用)
+  return rows.filter(r=>{
+    if(r.date!==st.date) return false;
+    const p=P[r.p];
+    if(st.side!=="all" && p.side!==st.side) return false;
+    if(st.mkt!=="all" && r.mkt!==st.mkt) return false;
+    if(st.liquid && !r.liquid) return false;
+    if(st.vol && !(r.volR>=1.5)) return false;
+    if(st.q){const q=st.q.toLowerCase(); if(!(r.code.includes(q)||r.name.toLowerCase().includes(q))) return false;}
+    return true;
+  });
+}
+
+function render(){
+  const b=base();
+  const counts={}; b.forEach(r=>counts[r.p]=(counts[r.p]||0)+1);
+  document.getElementById("groups").innerHTML=GROUPS.map(([title,fn])=>{
+    const ps=DATA.patterns.filter(fn).filter(p=>st.side==="all"||p.side===st.side);
+    if(!ps.length) return "";
+    return `<div class="panel group"><div class="pb"><h3>${title}</h3><div class="cards">${ps.map(p=>
+      `<div class="pc ${p.side} ${st.pat===p.id?'on':''} ${counts[p.id]?'':'zero'}" data-id="${p.id}" title="${esc(p.desc)}">${esc(p.name)} <span class="n">${counts[p.id]||0}</span></div>`).join("")}</div></div></div>`;
+  }).join("");
+  document.querySelectorAll(".pc").forEach(el=>el.onclick=()=>{st.pat=st.pat===el.dataset.id?null:el.dataset.id; render();});
+
+  let v=st.pat?b.filter(r=>r.p===st.pat):b;
+  const k=st.sortKey, dir=st.sortDir;
+  v=[...v].sort((a,c)=>{let x=a[k],y=c[k]; if(k==="p"){x=P[x].name;y=P[y].name;}
+    if(typeof x==="string"||typeof y==="string") return String(x??"")<String(y??"")?-dir:String(x??"")>String(y??"")?dir:0;
+    x=x==null?-1e15*-dir:x; y=y==null?-1e15*-dir:y; return (x-y)*dir;});
+  document.getElementById("thr").innerHTML=COLS.map(c=>`<th data-k="${c.k}">${c.t}${st.sortKey===c.k?(st.sortDir<0?" ▼":" ▲"):""}</th>`).join("");
+  document.querySelectorAll("#thr th").forEach(th=>th.onclick=()=>{const kk=th.dataset.k;
+    if(st.sortKey===kk) st.sortDir*=-1; else {st.sortKey=kk; st.sortDir=["code","name","mkt","p","date"].includes(kk)?1:-1;} render();});
+  const LIMIT=500, shown=v.slice(0,LIMIT);
+  document.getElementById("tb").innerHTML=shown.length?shown.map(r=>`<tr>${COLS.map(c=>`<td>${c.fmt(r)}</td>`).join("")}</tr>`).join("")
+    :`<tr><td class="empty" colspan="${COLS.length}">這一天沒有符合條件的型態</td></tr>`;
+  const stocks=new Set(v.map(r=>r.code)).size;
+  document.getElementById("cnt").innerHTML=`${st.date} · ${st.pat?esc(P[st.pat].name)+" · ":""}${v.length} 筆型態、${stocks} 檔股票${v.length>LIMIT?` · 顯示前 ${LIMIT}`:""}`;
+}
+
+function kpis(){
+  const d=rows.filter(r=>r.date===DATA.dataDate && r.liquid);
+  const n=side=>new Set(d.filter(r=>P[r.p].side===side).map(r=>r.code)).size;
+  const cont=new Set(d.filter(r=>P[r.p].kind==="continuation").map(r=>r.code)).size;
+  document.getElementById("kpis").innerHTML=[
+    ["掃描檔數",`${DATA.total} <small>檔</small>`],["最新一日 多頭型態",`<span class="up">${n("bull")}</span> <small>檔</small>`],
+    ["最新一日 空頭型態",`<span class="down">${n("bear")}</span> <small>檔</small>`],["最新一日 跳空 / 三法",`${cont} <small>檔</small>`],
+    ["最新一日 長腳十字",`${n("neutral")} <small>檔</small>`]].map(([k,v])=>`<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+}
+
+function segs(){
+  const ds=document.getElementById("dateSeg");
+  ds.innerHTML=DATA.dates.map(d=>`<button data-v="${d}" class="${d===st.date?'on':''}">${d.slice(5)}</button>`).join("");
+  const bind=(id,key)=>document.getElementById(id).onclick=e=>{const b=e.target.closest("button"); if(!b) return;
+    st[key]=b.dataset.v; document.querySelectorAll(`#${id} button`).forEach(x=>x.classList.toggle("on",x===b)); render();};
+  bind("dateSeg","date"); bind("sideSeg","side"); bind("mktSeg","mkt");
+  document.getElementById("search").oninput=e=>{st.q=e.target.value.trim();render();};
+  document.getElementById("liquid").onchange=e=>{st.liquid=e.target.checked;render();};
+  document.getElementById("vol").onchange=e=>{st.vol=e.target.checked;render();};
+}
+
+function boot(d){
+  DATA=d; rows=d.hits; d.patterns.forEach(p=>P[p.id]=p); st.date=d.dataDate;
+  const upd=new Date(d.generatedAt).toLocaleString("zh-TW",{timeZone:"Asia/Taipei",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
+  document.getElementById("meta").innerHTML=`資料日期 <b>${d.dataDate}</b> · 更新於 ${upd} · 列出近 ${d.dates.length} 個交易日出現的 ${d.patterns.length} 種型態`;
+  document.getElementById("gloss").innerHTML=d.patterns.map(p=>`<div><b>${esc(p.name)}</b> <span class="tag ${p.side}">${SIDE[p.side]}</span> <span class="neu">${p.bars} 根 · p.${p.page}${p.confirm?" · 需確認":""}</span><br>${esc(p.desc)}</div>`).join("");
+  kpis(); segs(); render();
+}
+
+if(window.PAT_DATA) boot(window.PAT_DATA);
+else fetch("data.json").then(r=>r.json()).then(boot).catch(()=>{
+  document.getElementById("tb").innerHTML='<tr><td class="empty" colspan="12">尚無資料:請先執行 python fetch_patterns.py</td></tr>';
+});
+</script>
+</body>
+</html>
